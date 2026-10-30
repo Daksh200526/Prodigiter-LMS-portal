@@ -63,11 +63,19 @@ class Settings:
 
     JWT_SECRET_KEY = _require_secret("JWT_SECRET_KEY", os.getenv("JWT_SECRET_KEY"))
     OTP_PEPPER = _require_secret("OTP_PEPPER", os.getenv("OTP_PEPPER"))
-    SMS_ALERT_API_KEY = os.getenv("SMS_ALERT_API_KEY", "").strip()
-    SMS_ALERT_SENDER_ID = os.getenv("SMS_ALERT_SENDER_ID", "").strip()
-    SMS_ALERT_OTP_MESSAGE = os.getenv(
-        "SMS_ALERT_OTP_MESSAGE",
-        "Your LMS verification code is {otp}. It expires in 5 minutes. Do not share it.",
+    WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "EAAXS6AAfprgBS83vN6l1bd9tyAQaFokjZBRPZBWld6dKjgCn30t4IZBIYKK64nnpZCZAgpadR7CTedWa1ZC3YWZCmWHe11Tgf3cc3XYZBLe15HfYSKLdZC2LjEWk45qOmsfLzLlwg9t0cJRgZBhZB7ImgJPQnivEDoCeBLsxX4PKoQAG0xiW0h8bHxUjy3qhrr2I2ZCQ2QZDZD").strip()
+    WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "108588198983800").strip()
+    WHATSAPP_OTP_TEMPLATE_NAME = os.getenv(
+        "WHATSAPP_OTP_TEMPLATE_NAME",
+        "login_otp",
+    ).strip()
+    WHATSAPP_OTP_TEMPLATE_LANGUAGE = os.getenv(
+        "WHATSAPP_OTP_TEMPLATE_LANGUAGE",
+        "en_US",
+    ).strip()
+    WHATSAPP_GRAPH_API_VERSION = os.getenv(
+        "WHATSAPP_GRAPH_API_VERSION",
+        "v26.0",
     ).strip()
     assignment_webhook_secret = os.getenv("ASSIGNMENT_WEBHOOK_SECRET")
     if assignment_webhook_secret:

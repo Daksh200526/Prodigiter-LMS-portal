@@ -7,7 +7,7 @@ import unittest
 import uuid
 import time
 import datetime
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 from unittest.mock import MagicMock, patch
 
 os.environ["DATABASE_URL"] = "sqlite:///test_lms.db"
@@ -1999,94 +1999,10 @@ class TestLMSAPI(unittest.TestCase):
             otp_security.discard_otp(db, phone)
             db.close()
 
-    def test_sms_otp_uses_sms_alert_api(self):
-        import sms_service
+    def test_whatsapp_otp_uses_meta_authentication_template(self):
+        import whatsapp_service
 
         class SuccessfulResponse:
-            status = 202
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc_value, traceback):
-                return False
-
-            def read(self, size):
-                return b'{"status":"accepted"}'
-
-        with (
-            patch.object(sms_service.settings, "SMS_ALERT_API_KEY", "unit-test-api-key"),
-            patch.object(sms_service.settings, "SMS_ALERT_SENDER_ID", "LMSOTP"),
-            patch.object(
-                sms_service.settings,
-                "SMS_ALERT_OTP_MESSAGE",
-                "Your verification code is {otp}.",
-            ),
-            patch("sms_service.urlopen", return_value=SuccessfulResponse()) as send_request,
-        ):
-            sms_service.send_sms_otp("9876543210", "123456")
-
-        request = send_request.call_args.args[0]
-        params = parse_qs(urlparse(request.full_url).query)
-        self.assertEqual(request.method, "POST")
-        self.assertEqual(params["apikey"], ["unit-test-api-key"])
-        self.assertEqual(params["sender"], ["LMSOTP"])
-        self.assertEqual(params["mobileno"], ["+919876543210"])
-        self.assertEqual(params["text"], ["Your verification code is 123456."])
-        self.assertEqual(send_request.call_args.kwargs["timeout"], 10)
-
-    def test_sms_alert_configuration_requires_otp_template_placeholder(self):
-        import sms_service
-
-        with (
-            patch.object(sms_service.settings, "SMS_ALERT_API_KEY", "unit-test-api-key"),
-            patch.object(sms_service.settings, "SMS_ALERT_SENDER_ID", "LMSOTP"),
-            patch.object(
-                sms_service.settings,
-                "SMS_ALERT_OTP_MESSAGE",
-                "Your code is {otp}.",
-            ),
-        ):
-            self.assertTrue(sms_service.is_sms_delivery_configured())
-
-        with (
-            patch.object(sms_service.settings, "SMS_ALERT_API_KEY", "unit-test-api-key"),
-            patch.object(sms_service.settings, "SMS_ALERT_SENDER_ID", "LMSOTP"),
-            patch.object(
-                sms_service.settings,
-                "SMS_ALERT_OTP_MESSAGE",
-                "Your verification code is ready.",
-            ),
-        ):
-            self.assertFalse(sms_service.is_sms_delivery_configured())
-
-    def test_sms_alert_http_error_has_safe_actionable_diagnostics(self):
-        import sms_service
-        from urllib.error import HTTPError
-
-        with (
-            patch.object(sms_service.settings, "SMS_ALERT_API_KEY", "unit-test-api-key"),
-            patch.object(sms_service.settings, "SMS_ALERT_SENDER_ID", "LMSOTP"),
-            patch("sms_service.urlopen", side_effect=HTTPError(
-                "https://www.smsalert.co.in/api/push.json?apikey=unit-test-api-key",
-                401,
-                "Unauthorized",
-                {},
-                None,
-            )),
-            self.assertRaises(sms_service.SmsAlertError) as raised,
-        ):
-            sms_service.send_sms_otp("9876543210", "123456")
-
-        self.assertIn("HTTP 401", str(raised.exception))
-        self.assertIn("API key was rejected", str(raised.exception))
-        self.assertNotIn("unit-test-api-key", str(raised.exception))
-        self.assertNotIn("123456", str(raised.exception))
-
-    def test_sms_alert_json_error_response_is_not_reported_as_success(self):
-        import sms_service
-
-        class RejectedResponse:
             status = 200
 
             def __enter__(self):
@@ -2096,17 +2012,126 @@ class TestLMSAPI(unittest.TestCase):
                 return False
 
             def read(self, size):
-                return b'{"status":"error","description":"sender rejected"}'
+                return b'{"messages":[{"id":"wamid.test"}]}'
 
         with (
-            patch.object(sms_service.settings, "SMS_ALERT_API_KEY", "unit-test-api-key"),
-            patch.object(sms_service.settings, "SMS_ALERT_SENDER_ID", "LMSOTP"),
-            patch("sms_service.urlopen", return_value=RejectedResponse()),
-            self.assertRaises(sms_service.SmsAlertError) as raised,
+            patch.object(whatsapp_service.settings, "WHATSAPP_ACCESS_TOKEN", "test-token"),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_PHONE_NUMBER_ID",
+                "123456789",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_NAME",
+                "login_otp",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_LANGUAGE",
+                "en_US",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_GRAPH_API_VERSION",
+                "v26.0",
+            ),
+            patch("whatsapp_service.urlopen", return_value=SuccessfulResponse()) as send_request,
         ):
-            sms_service.send_sms_otp("9876543210", "123456")
+            whatsapp_service.send_whatsapp_otp("9876543210", "123456")
 
-        self.assertIn("did not accept", str(raised.exception))
+        request = send_request.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://graph.facebook.com/v26.0/123456789/messages",
+        )
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-token")
+        payload = json.loads(request.data)
+        self.assertEqual(payload["messaging_product"], "whatsapp")
+        self.assertEqual(payload["to"], "919876543210")
+        self.assertEqual(payload["template"]["name"], "login_otp")
+        self.assertEqual(payload["template"]["language"]["code"], "en_US")
+        components = payload["template"]["components"]
+        self.assertEqual(components[0]["parameters"][0]["text"], "123456")
+        self.assertEqual(components[1]["sub_type"], "url")
+        self.assertEqual(components[1]["parameters"][0]["text"], "123456")
+        self.assertEqual(send_request.call_args.kwargs["timeout"], 10)
+
+    def test_whatsapp_configuration_requires_access_token_and_sender_settings(self):
+        import whatsapp_service
+
+        with (
+            patch.object(whatsapp_service.settings, "WHATSAPP_ACCESS_TOKEN", "test-token"),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_PHONE_NUMBER_ID",
+                "123456789",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_NAME",
+                "login_otp",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_LANGUAGE",
+                "en_US",
+            ),
+        ):
+            self.assertTrue(whatsapp_service.is_whatsapp_delivery_configured())
+
+        with patch.object(whatsapp_service.settings, "WHATSAPP_ACCESS_TOKEN", ""):
+            self.assertFalse(whatsapp_service.is_whatsapp_delivery_configured())
+
+    def test_whatsapp_delivery_failure_does_not_expose_token_or_otp(self):
+        import io
+        import whatsapp_service
+        from urllib.error import HTTPError
+
+        error_body = json.dumps({
+            "error": {
+                "message": "Invalid token test-token for verification code 123456.",
+                "type": "OAuthException",
+                "code": 190,
+                "error_subcode": 463,
+            },
+        }).encode("utf-8")
+        with (
+            patch.object(whatsapp_service.settings, "WHATSAPP_ACCESS_TOKEN", "test-token"),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_PHONE_NUMBER_ID",
+                "123456789",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_NAME",
+                "login_otp",
+            ),
+            patch.object(
+                whatsapp_service.settings,
+                "WHATSAPP_OTP_TEMPLATE_LANGUAGE",
+                "en_US",
+            ),
+            patch(
+                "whatsapp_service.urlopen",
+                side_effect=HTTPError(
+                    "https://graph.facebook.com/v26.0/123456789/messages",
+                    400,
+                    "Bad Request",
+                    {},
+                    io.BytesIO(error_body),
+                ),
+            ),
+            self.assertRaises(whatsapp_service.WhatsAppError) as raised,
+        ):
+            whatsapp_service.send_whatsapp_otp("9876543210", "123456")
+
+        self.assertIn("HTTP 400", str(raised.exception))
+        self.assertIn("code 190", str(raised.exception))
+        self.assertIn("Invalid token [redacted]", str(raised.exception))
+        self.assertNotIn("test-token", str(raised.exception))
         self.assertNotIn("123456", str(raised.exception))
 
     def test_seed_script_provisions_hashed_role_accounts_idempotently(self):
@@ -2183,8 +2208,8 @@ class TestLMSAPI(unittest.TestCase):
         db.commit()
         try:
             with (
-                patch.object(main, "is_sms_delivery_configured", return_value=True),
-                patch.object(main, "send_sms_otp") as send_sms,
+                patch.object(main, "is_whatsapp_delivery_configured", return_value=True),
+                patch.object(main, "send_whatsapp_otp") as send_whatsapp,
             ):
                 registered_response = self.client.post(
                     "/auth/request-otp",
@@ -2198,20 +2223,20 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(registered_response.status_code, 200)
             self.assertEqual(unregistered_response.status_code, 200)
             self.assertIn("If this number is registered", registered_response.json()["message"])
-            self.assertIn("delivery report", registered_response.json()["message"])
+            self.assertIn("WhatsApp messages", registered_response.json()["message"])
             self.assertEqual(registered_response.json(), unregistered_response.json())
-            send_sms.assert_called_once()
+            send_whatsapp.assert_called_once()
         finally:
             otp_security.discard_otp(db, phone)
             db.close()
 
-    def test_sms_otp_request_and_verification_work_end_to_end(self):
+    def test_whatsapp_otp_request_and_verification_work_end_to_end(self):
         phone = f"9{uuid.uuid4().int % 1000000000:09d}"
         user_id = str(uuid.uuid4())
         db = self.testing_session_local()
         db.add(main.models.User(
             id=user_id,
-            name="SMS Login Student",
+            name="WhatsApp Login Student",
             email=f"{user_id}@example.com",
             phone_number=phone,
             role="student",
@@ -2221,9 +2246,9 @@ class TestLMSAPI(unittest.TestCase):
         db.close()
 
         with (
-            patch.object(main, "is_sms_delivery_configured", return_value=True),
-            patch.object(main, "generate_secure_otp", return_value="246810"),
-            patch.object(main, "send_sms_otp") as send_sms,
+            patch.object(main, "is_whatsapp_delivery_configured", return_value=True),
+            patch.object(main, "generate_secure_otp", return_value="135790"),
+            patch.object(main, "send_whatsapp_otp") as send_whatsapp,
             patch.object(main.auth, "record_rate_limit_attempt", return_value=True),
         ):
             request_response = self.client.post(
@@ -2232,21 +2257,16 @@ class TestLMSAPI(unittest.TestCase):
             )
             verify_response = self.client.post(
                 "/auth/verify-otp",
-                json={"phone_number": phone, "otp_code": "246810"},
+                json={"phone_number": phone, "otp_code": "135790"},
             )
 
         self.assertEqual(request_response.status_code, 200, request_response.text)
+        self.assertIn("WhatsApp delivery", request_response.json()["message"])
         self.assertEqual(verify_response.status_code, 200, verify_response.text)
         self.assertEqual(verify_response.json()["role"], "student")
-        self.assertTrue(verify_response.json()["access_token"])
-        send_sms.assert_called_once_with(phone, "246810")
-        db = self.testing_session_local()
-        try:
-            self.assertIsNone(db.get(main.models.OTPChallenge, otp_security._phone_hash(phone)))
-        finally:
-            db.close()
+        send_whatsapp.assert_called_once_with(phone, "135790")
 
-    def test_dev_mode_returns_otp_without_sending_sms(self):
+    def test_dev_mode_returns_otp_without_sending_whatsapp(self):
         phone = f"9{uuid.uuid4().int % 1000000000:09d}"
         user_id = str(uuid.uuid4())
         db = self.testing_session_local()
@@ -2263,9 +2283,9 @@ class TestLMSAPI(unittest.TestCase):
 
         with (
             patch.object(main.settings, "DEV_MODE", True),
-            patch.object(main, "is_sms_delivery_configured", return_value=False),
+            patch.object(main, "is_whatsapp_delivery_configured", return_value=False),
             patch.object(main, "generate_secure_otp", return_value="135790"),
-            patch.object(main, "send_sms_otp") as send_sms,
+            patch.object(main, "send_whatsapp_otp") as send_whatsapp,
             patch.object(main.auth, "record_rate_limit_attempt", return_value=True),
         ):
             request_response = self.client.post(
@@ -2282,15 +2302,15 @@ class TestLMSAPI(unittest.TestCase):
         self.assertIn("Development mode", request_response.json()["message"])
         self.assertEqual(verify_response.status_code, 200, verify_response.text)
         self.assertEqual(verify_response.json()["role"], "student")
-        send_sms.assert_not_called()
+        send_whatsapp.assert_not_called()
 
-    def test_otp_request_reports_missing_sms_configuration_without_enumerating_users(self):
+    def test_otp_request_reports_missing_whatsapp_configuration_without_enumerating_users(self):
         phone = f"9{uuid.uuid4().int % 1000000000:09d}"
         user_id = str(uuid.uuid4())
         db = self.testing_session_local()
         db.add(main.models.User(
             id=user_id,
-            name="SMS Student",
+            name="WhatsApp Student",
             email=f"{user_id}@example.com",
             phone_number=phone,
             role="student",
@@ -2299,7 +2319,7 @@ class TestLMSAPI(unittest.TestCase):
         db.commit()
         db.close()
 
-        with patch.object(main, "is_sms_delivery_configured", return_value=False):
+        with patch.object(main, "is_whatsapp_delivery_configured", return_value=False):
             registered_response = self.client.post(
                 "/auth/request-otp",
                 json={"phone_number": phone},
@@ -2319,7 +2339,7 @@ class TestLMSAPI(unittest.TestCase):
         db = self.testing_session_local()
         db.add(main.models.User(
             id=user_id,
-            name="SMS Student",
+            name="WhatsApp Student",
             email=f"{user_id}@example.com",
             phone_number=phone,
             role="student",
@@ -2329,8 +2349,8 @@ class TestLMSAPI(unittest.TestCase):
         db.close()
 
         with (
-            patch.object(main, "is_sms_delivery_configured", return_value=True),
-            patch.object(main, "send_sms_otp", side_effect=main.SmsAlertError("provider error")),
+            patch.object(main, "is_whatsapp_delivery_configured", return_value=True),
+            patch.object(main, "send_whatsapp_otp", side_effect=main.WhatsAppError("provider error")),
         ):
             response = self.client.post(
                 "/auth/request-otp",

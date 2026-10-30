@@ -29,10 +29,10 @@ from database import SessionLocal, engine, get_db
 from review_service import REVIEW_QUESTIONS, ReviewProviderError, generate_review
 from utils import PROJECT_ASSIGNMENT_COUNT, get_project_assignment_link
 import qrcode
-from sms_service import (
-    SmsAlertError,
-    is_sms_delivery_configured,
-    send_sms_otp,
+from whatsapp_service import (
+    WhatsAppError,
+    is_whatsapp_delivery_configured,
+    send_whatsapp_otp,
 )
 from otp_security import (
     normalize_phone,
@@ -43,6 +43,7 @@ from otp_security import (
     verify_and_burn_otp,
     RESEND_COOLDOWN_SECONDS,
 )
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -376,10 +377,10 @@ def request_otp(
     clean_phone = normalize_phone(payload.phone_number)
     if not clean_phone:
         raise HTTPException(status_code=400, detail="Please enter a valid 10-digit Indian phone number.")
-    if not settings.DEV_MODE and not is_sms_delivery_configured():
+    if not settings.DEV_MODE and not is_whatsapp_delivery_configured():
         raise HTTPException(
             status_code=503,
-            detail="SMS OTP delivery is not configured. Ask an administrator to configure SMS Alert.",
+            detail="WhatsApp OTP delivery is not configured. Set the required WhatsApp environment variables.",
         )
 
     user = db.query(models.User).filter_by(phone_number=clean_phone).first()
@@ -392,8 +393,8 @@ def request_otp(
         save_otp(db, clean_phone, otp_code)
         if not settings.DEV_MODE and user:
             try:
-                send_sms_otp(clean_phone, otp_code)
-            except SmsAlertError as error:
+                send_whatsapp_otp(clean_phone, otp_code)
+            except WhatsAppError as error:
                 discard_otp(db, clean_phone)
                 raise HTTPException(
                     status_code=502,
@@ -404,8 +405,10 @@ def request_otp(
         "message": (
             "Development mode: use the displayed OTP to continue."
             if settings.DEV_MODE
-            else "If this number is registered, an OTP request was processed. "
-            "SMS delivery can take time; check your SMS Alert delivery report if it does not arrive."
+            else (
+                "If this number is registered, an OTP request was processed. "
+                "WhatsApp delivery can take time; check the recipient's WhatsApp messages if it does not arrive."
+            )
         ),
         "cooldown": RESEND_COOLDOWN_SECONDS
     }
@@ -508,10 +511,10 @@ def request_recovery_phone_otp(
     existing_user = db.query(models.User).filter_by(phone_number=clean_phone).first()
     if existing_user and existing_user.id != current_user.id:
         raise HTTPException(status_code=409, detail="This phone number is already linked to another account.")
-    if not settings.DEV_MODE and not is_sms_delivery_configured():
+    if not settings.DEV_MODE and not is_whatsapp_delivery_configured():
         raise HTTPException(
             status_code=503,
-            detail="SMS OTP delivery is not configured. Ask an administrator to configure SMS Alert.",
+            detail="WhatsApp OTP delivery is not configured. Set the required WhatsApp environment variables.",
         )
 
     allowed, err_msg = check_rate_limit(db, clean_phone)
@@ -522,8 +525,8 @@ def request_recovery_phone_otp(
     save_otp(db, clean_phone, otp_code)
     if not settings.DEV_MODE:
         try:
-            send_sms_otp(clean_phone, otp_code)
-        except SmsAlertError as error:
+            send_whatsapp_otp(clean_phone, otp_code)
+        except WhatsAppError as error:
             discard_otp(db, clean_phone)
             raise HTTPException(status_code=502, detail=str(error)) from None
 
