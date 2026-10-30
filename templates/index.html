@@ -119,7 +119,7 @@
       font-weight: 500;
       font-size: 0.9rem;
     }
-    input {
+    input, select {
       width: 100%;
       padding: 0.6rem;
       box-sizing: border-box;
@@ -273,17 +273,6 @@
     .lesson-community-panel {
       min-width: 0;
     }
-    .progress-track {
-      height: 0.7rem;
-      background: #e2e8f0;
-      border-radius: 999px;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      background: #16a34a;
-      transition: width 0.2s ease;
-    }
     .assignment-link-btn {
       display: inline-flex;
       align-items: center;
@@ -436,15 +425,6 @@
     }
     .trainer-question-card button {
       margin-top: 0.65rem;
-    }
-    .trainer-pending-section {
-      width: 100%;
-      box-sizing: border-box;
-      margin-top: 1rem;
-      padding: 1rem;
-      background: #f8fafc;
-      border: 1px solid var(--border);
-      border-radius: 8px;
     }
     .trainer-pending-table-wrap {
       width: 100%;
@@ -665,12 +645,11 @@
         <button id="tab-admin" class="tab-btn active" onclick="switchLoginRole('admin')">Admin</button>
         <button id="tab-trainer" class="tab-btn" onclick="switchLoginRole('trainer')">Trainer</button>
         <button id="tab-student" class="tab-btn" onclick="switchLoginRole('student')">Student Password</button>
-        <button id="tab-otp" class="tab-btn" onclick="switchLoginRole('student-otp')">OTP Login</button>
+        <button id="tab-otp" class="tab-btn" onclick="switchLoginRole('student-otp')">WhatsApp OTP</button>
       </div>
 
       <!-- Password Login Form -->
       <form id="password-login-box" autocomplete="off" onsubmit="event.preventDefault(); submitPasswordLogin();">
-        <!-- Hidden decoy inputs to trap browser autofill engines -->
         <input type="text" style="display:none;" tabindex="-1" autocomplete="username">
         <input type="password" style="display:none;" tabindex="-1" autocomplete="current-password">
 
@@ -691,7 +670,7 @@
           <label for="otp-phone">Registered Phone Number</label>
           <input type="tel" id="otp-phone" placeholder="10-digit Indian mobile number" inputmode="tel" autocomplete="tel" maxlength="13" value="">
         </div>
-        <button id="request-otp-btn" type="button" class="submit-btn" onclick="requestOTP()">Send Verification OTP</button>
+        <button id="request-otp-btn" type="button" class="submit-btn" onclick="requestOTP()">Send Code on WhatsApp</button>
 
         <div id="verify-otp-subbox" class="hidden" style="margin-top: 1.5rem;">
           <div class="form-group">
@@ -746,7 +725,7 @@
           <input type="email" id="reg-email" placeholder="student@example.com" autocomplete="off">
         </div>
         <div class="form-group">
-          <label for="reg-course-subject">Choose your course</label>
+          <label for="reg-course-subject">Choose your initial course</label>
           <select id="reg-course-subject" required>
             <option value="">Select a course</option>
             <option value="Web Development">Web Development</option>
@@ -767,7 +746,6 @@
         <button type="submit" class="submit-btn" style="background:#059669;">Create Student Account</button>
       </form>
 
-      <!-- Bottom Center Login Trigger -->
       <div class="bottom-switch-link">
         <span>Already have an account? </span><a onclick="showLoginView()">Click here to sign in</a>
         <br><a onclick="showForgotPasswordView()">Forgot password?</a>
@@ -873,13 +851,13 @@
   <div id="admin-view" class="card hidden">
     <h3>Admin Management Portal</h3>
     <div id="admin-metrics" style="display:flex; gap:1rem; margin-bottom: 1.5rem;"></div>
-    <button type="button" class="submit-btn" style="max-width: 240px;" onclick="openCreateTrainerModal()">
+    <button type="button" class="submit-btn" style="max-width: 240px; margin-bottom: 1.5rem;" onclick="openCreateTrainerModal()">
       Add a New Trainer
     </button>
     <h4>Pending Candidate Access Approvals</h4>
     <div id="admin-pending-table-container">Loading approvals...</div>
     <section>
-      <h4>Student Progress</h4>
+      <h4>Student Progress & Course Assignment</h4>
       <div id="admin-student-list">Loading students...</div>
     </section>
     <section class="assignment-card">
@@ -891,6 +869,18 @@
   <!-- Trainer View -->
   <div id="trainer-view" class="card hidden">
     <h3>Trainer Dashboard</h3>
+    
+    <!-- Course Assignment Section for Students under Trainer -->
+    <div class="card" style="margin-bottom: 1.5rem; background: #ffffff; border-color: #cbd5e1;">
+      <h4 style="margin-top: 0; margin-bottom: 0.35rem;">Course Assignment (Students Under Your Instruction)</h4>
+      <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 1rem;">
+        You can assign additional courses you teach to students who are currently enrolled under you.
+      </p>
+      <div id="trainer-assign-students-container" style="overflow-x: auto;">
+        Loading eligible students...
+      </div>
+    </div>
+
     <div class="trainer-layout">
       <main id="trainer-courses">Loading student and assignment details...</main>
       <aside class="trainer-actions" aria-label="Course actions">
@@ -1211,7 +1201,8 @@
     document.getElementById('register-container').classList.add('hidden');
     document.getElementById('forgot-password-container').classList.add('hidden');
     ['reset-phone', 'reset-otp', 'reset-new-password'].forEach(id => {
-      document.getElementById(id).value = '';
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
     document.getElementById('reset-password-form').classList.add('hidden');
     document.getElementById('login-container').classList.remove('hidden');
@@ -1223,14 +1214,14 @@
     document.getElementById('register-container').classList.add('hidden');
     document.getElementById('forgot-password-container').classList.remove('hidden');
     ['reset-phone', 'reset-otp', 'reset-new-password'].forEach(id => {
-      document.getElementById(id).value = '';
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
     document.getElementById('reset-password-form').classList.add('hidden');
   }
 
   window.addEventListener('DOMContentLoaded', () => {
     switchLoginRole('admin');
-    // Repeated delayed sweep to kill browser autofill attempts
     setTimeout(hardClearInputs, 50);
     setTimeout(hardClearInputs, 200);
     setTimeout(hardClearInputs, 500);
@@ -1323,7 +1314,7 @@
       alert("Network request error.");
     } finally {
       button.disabled = false;
-      button.textContent = 'Send Verification OTP';
+      button.textContent = 'Send Code on WhatsApp';
     }
   }
 
@@ -2152,147 +2143,142 @@
       container.replaceChildren(table);
     }
 
-      await renderAdminStudentList(token);
-      await renderAdminDeletionRequests(token);
+    await renderAdminStudentList(token);
+    await renderAdminDeletionRequests(token);
   }
 
   async function renderAdminStudentList(token) {
-      const container = document.getElementById('admin-student-list');
-      const response = await fetch('/admin/students', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Failed to load student progress.');
-      renderStudentTable(container, data.students || [], false);
+    const container = document.getElementById('admin-student-list');
+    const response = await fetch('/admin/students', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load student progress.');
+    renderStudentTable(container, data.students || [], false);
   }
 
   function renderStudentTable(container, students, canRequestDeletion, deletionStates = new Map()) {
-      container.replaceChildren();
-      if (!students.length) {
-        const message = document.createElement('p');
-        message.textContent = 'No students to display.';
-        container.appendChild(message);
-        return;
+    container.replaceChildren();
+    if (!students.length) {
+      const message = document.createElement('p');
+      message.textContent = 'No students to display.';
+      container.appendChild(message);
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'student-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'student-table';
+    const header = table.createTHead().insertRow();
+    ['Student name', 'Email ID', 'Phone Number', 'Course title', 'Joining date', 'Progress', 'Delete'].forEach(label => {
+      const cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = label;
+      header.appendChild(cell);
+    });
+
+    const body = table.createTBody();
+    students.forEach(student => {
+      const row = body.insertRow();
+      [
+        student.student_name,
+        student.student_email,
+        student.phone_number || 'Not provided',
+        student.course_title,
+        student.enrolled_at ? new Date(student.enrolled_at).toLocaleDateString() : '—',
+      ].forEach(value => {
+        row.insertCell().textContent = value == null ? '' : String(value);
+      });
+
+      const progressCell = row.insertCell();
+      const progress = document.createElement('div');
+      progress.className = 'student-progress';
+      progress.setAttribute('role', 'progressbar');
+      progress.setAttribute('aria-valuemin', '0');
+      progress.setAttribute('aria-valuemax', '12');
+      progress.setAttribute('aria-valuenow', String(Math.min(student.completed_slots || 0, 12)));
+      progress.setAttribute(
+        'aria-label',
+        `${student.student_name}: ${student.completed_slots || 0} of ${student.total_slots || 0} lessons complete`
+      );
+      for (let index = 0; index < 12; index += 1) {
+        const segment = document.createElement('span');
+        const module = (student.modules || [])[index];
+        if (module && module.is_video_completed && module.assignment_completed) {
+          segment.classList.add('complete');
+        }
+        segment.classList.add('student-progress-segment');
+        segment.setAttribute('aria-hidden', 'true');
+        progress.appendChild(segment);
       }
+      progressCell.appendChild(progress);
 
-      const wrapper = document.createElement('div');
-      wrapper.className = 'student-table-wrap';
-      const table = document.createElement('table');
-      table.className = 'student-table';
-      const header = table.createTHead().insertRow();
-      ['Student name', 'Email ID', 'Phone Number', 'Course title', 'Joining date', 'Progress', 'Delete'].forEach(label => {
-        const cell = document.createElement('th');
-        cell.scope = 'col';
-        cell.textContent = label;
-        header.appendChild(cell);
-      });
+      const actionCell = row.insertCell();
+      const state = deletionStates.get(student.student_id);
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'student-delete-btn';
+      deleteButton.textContent = '🗑';
+      deleteButton.setAttribute('aria-label', `Request deletion of ${student.student_name}`);
+      deleteButton.title = state === 'pending'
+        ? 'Waiting for admin approval'
+        : state === 'approved'
+          ? 'Delete student (admin approved)'
+          : canRequestDeletion
+            ? 'Request student deletion'
+            : 'Only the student’s trainer can request deletion';
+      deleteButton.disabled = !canRequestDeletion || state === 'pending';
+      actionCell.appendChild(deleteButton);
 
-      const body = table.createTBody();
-      students.forEach(student => {
-        const row = body.insertRow();
-        [
-          student.student_name,
-          student.student_email,
-          student.phone_number || 'Not provided',
-          student.course_title,
-          student.enrolled_at ? new Date(student.enrolled_at).toLocaleDateString() : '—',
-        ].forEach(value => {
-          row.insertCell().textContent = value == null ? '' : String(value);
-        });
-
-        const progressCell = row.insertCell();
-        const progress = document.createElement('div');
-        progress.className = 'student-progress';
-        progress.setAttribute('role', 'progressbar');
-        progress.setAttribute('aria-valuemin', '0');
-        progress.setAttribute('aria-valuemax', '12');
-        progress.setAttribute('aria-valuenow', String(Math.min(student.completed_slots || 0, 12)));
-        progress.setAttribute(
-          'aria-label',
-          `${student.student_name}: ${student.completed_slots || 0} of ${student.total_slots || 0} lessons complete`
-        );
-        for (let index = 0; index < 12; index += 1) {
-          const segment = document.createElement('span');
-          const module = (student.modules || [])[index];
-          if (module && module.is_video_completed && module.assignment_completed) {
-            segment.classList.add('complete');
+      if (canRequestDeletion && student.student_id && state !== 'pending') {
+        deleteButton.addEventListener('click', () => {
+          if (state === 'approved') {
+            deleteApprovedStudent(student.student_id);
+          } else {
+            showStudentDeletionForm(body, row, student, deleteButton);
           }
-          segment.classList.add('student-progress-segment');
-          segment.setAttribute('aria-hidden', 'true');
-          progress.appendChild(segment);
-        }
-        progressCell.appendChild(progress);
-
-        const actionCell = row.insertCell();
-        const state = deletionStates.get(student.student_id);
-        const deleteButton = document.createElement('button');
-        deleteButton.type = 'button';
-        deleteButton.className = 'student-delete-btn';
-        deleteButton.textContent = '🗑';
-        deleteButton.setAttribute('aria-label', `Request deletion of ${student.student_name}`);
-        deleteButton.title = state === 'pending'
-          ? 'Waiting for admin approval'
-          : state === 'approved'
-            ? 'Delete student (admin approved)'
-            : canRequestDeletion
-              ? 'Request student deletion'
-              : 'Only the student’s trainer can request deletion';
-        deleteButton.disabled = !canRequestDeletion || state === 'pending';
-        actionCell.appendChild(deleteButton);
-
-        if (canRequestDeletion && student.student_id && state !== 'pending') {
-          deleteButton.addEventListener('click', () => {
-            if (state === 'approved') {
-              deleteApprovedStudent(student.student_id);
-            } else {
-              showStudentDeletionForm(
-                body,
-                row,
-                student,
-                deleteButton,
-              );
-            }
-          });
-        }
-      });
-      wrapper.appendChild(table);
-      container.appendChild(wrapper);
+        });
+      }
+    });
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
   }
 
   function showStudentDeletionForm(body, studentRow, student, deleteButton) {
-      const nextRow = studentRow.nextElementSibling;
-      if (nextRow && nextRow.dataset.deletionForm === 'true') return;
-      const formRow = body.insertRow(studentRow.sectionRowIndex + 1);
-      formRow.dataset.deletionForm = 'true';
-      const formCell = formRow.insertCell();
-      formCell.colSpan = 7;
-      formCell.className = 'student-delete-form-cell';
-      const label = document.createElement('label');
-      label.textContent = `Why should ${student.student_name} be deleted? This reason will be sent to an administrator.`;
-      const reason = document.createElement('textarea');
-      reason.className = 'student-delete-reason';
-      reason.maxLength = 2000;
-      reason.required = true;
-      reason.setAttribute('aria-label', `Deletion reason for ${student.student_name}`);
-      label.appendChild(reason);
-      const requestButton = document.createElement('button');
-      requestButton.type = 'button';
-      requestButton.textContent = 'Send request to admin';
-      requestButton.addEventListener('click', () => requestStudentDeletion(
-        student.student_id,
-        reason.value,
-        requestButton
-      ));
-      const cancelButton = document.createElement('button');
-      cancelButton.type = 'button';
-      cancelButton.textContent = 'Cancel';
-      cancelButton.style.marginLeft = '0.5rem';
-      cancelButton.addEventListener('click', () => {
-        formRow.remove();
-        deleteButton.focus();
-      });
-      formCell.append(label, requestButton, cancelButton);
-      reason.focus();
+    const nextRow = studentRow.nextElementSibling;
+    if (nextRow && nextRow.dataset.deletionForm === 'true') return;
+    const formRow = body.insertRow(studentRow.sectionRowIndex + 1);
+    formRow.dataset.deletionForm = 'true';
+    const formCell = formRow.insertCell();
+    formCell.colSpan = 7;
+    formCell.className = 'student-delete-form-cell';
+    const label = document.createElement('label');
+    label.textContent = `Why should ${student.student_name} be deleted? This reason will be sent to an administrator.`;
+    const reason = document.createElement('textarea');
+    reason.className = 'student-delete-reason';
+    reason.maxLength = 2000;
+    reason.required = true;
+    reason.setAttribute('aria-label', `Deletion reason for ${student.student_name}`);
+    label.appendChild(reason);
+    const requestButton = document.createElement('button');
+    requestButton.type = 'button';
+    requestButton.textContent = 'Send request to admin';
+    requestButton.addEventListener('click', () => requestStudentDeletion(
+      student.student_id,
+      reason.value,
+      requestButton
+    ));
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.marginLeft = '0.5rem';
+    cancelButton.addEventListener('click', () => {
+      formRow.remove();
+      deleteButton.focus();
+    });
+    formCell.append(label, requestButton, cancelButton);
+    reason.focus();
   }
 
   async function renderAdminDeletionRequests(token) {
@@ -2417,9 +2403,14 @@
     renderAdminDashboard();
   }
 
+  /* Trainer Dashboard Render & Course Assignment */
   async function renderTrainerDashboard() {
     const token = localStorage.getItem('jwt_token');
     const headers = { 'Authorization': 'Bearer ' + token };
+    
+    // Load student assignment panel
+    loadTrainerStudentAssignmentPanel();
+
     const courseContainer = document.getElementById('trainer-courses');
     const dashboardResponse = await fetch('/trainer/dashboard', { headers });
     const dashboard = await dashboardResponse.json();
@@ -2614,6 +2605,102 @@
     renderTrainerPendingAssignments(pending);
   }
 
+  async function loadTrainerStudentAssignmentPanel() {
+    const token = localStorage.getItem('jwt_token');
+    const container = document.getElementById('trainer-assign-students-container');
+
+    try {
+      const res = await fetch('/trainer/my-students', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        container.innerHTML = `<p style="color:#b91c1c;">${data.detail || 'Failed to load students'}</p>`;
+        return;
+      }
+
+      if (!data.students || data.students.length === 0) {
+        container.innerHTML = '<p style="color:#64748b; font-style:italic;">No students are currently enrolled in any of your courses.</p>';
+        return;
+      }
+
+      let rows = data.students.map(student => {
+        const currentCourses = student.enrolled_courses.map(c => `<span class="badge badge-success" style="margin-right:4px;">${c.title}</span>`).join(' ');
+        
+        let assignDropdownHtml = '';
+        if (student.available_to_assign.length > 0) {
+          const options = student.available_to_assign.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+          assignDropdownHtml = `
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <select id="assign-select-${student.id}" style="padding:0.4rem; border:1px solid var(--border); border-radius:4px; font-size:0.85rem; width: auto; max-width: 220px;">
+                ${options}
+              </select>
+              <button onclick="assignCourseToStudent('${student.id}')" class="submit-btn" style="width:auto; padding:0.45rem 0.85rem; margin:0; font-size:0.85rem; background:#059669;">
+                + Assign Course
+              </button>
+            </div>
+          `;
+        } else {
+          assignDropdownHtml = `<span style="font-size:0.85rem; color:#64748b; font-style:italic;">All courses assigned</span>`;
+        }
+
+        return `
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding:0.75rem 0.5rem;"><strong>${student.name}</strong><br><small style="color:#64748b;">${student.email}</small></td>
+            <td style="padding:0.75rem 0.5rem;">${student.phone_number || 'N/A'}</td>
+            <td style="padding:0.75rem 0.5rem;">${currentCourses}</td>
+            <td style="padding:0.75rem 0.5rem;">${assignDropdownHtml}</td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table style="width:100%; min-width: 650px; border-collapse:collapse; text-align:left; font-size:0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--border); background:#f8fafc;">
+              <th style="padding:0.6rem 0.5rem;">Student Name</th>
+              <th style="padding:0.6rem 0.5rem;">Phone</th>
+              <th style="padding:0.6rem 0.5rem;">Enrolled Courses</th>
+              <th style="padding:0.6rem 0.5rem;">Assign Additional Course</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    } catch (err) {
+      container.innerHTML = '<p style="color:#b91c1c;">Error loading student course management data.</p>';
+    }
+  }
+
+  async function assignCourseToStudent(studentId) {
+    const selectEl = document.getElementById(`assign-select-${studentId}`);
+    if (!selectEl) return;
+    const courseId = selectEl.value;
+
+    const token = localStorage.getItem('jwt_token');
+    try {
+      const res = await fetch('/trainer/assign-course', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ student_id: studentId, course_id: courseId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Failed to assign course");
+        return;
+      }
+      alert(data.message);
+      loadTrainerStudentAssignmentPanel();
+      renderTrainerDashboard();
+    } catch (err) {
+      alert("Network error while assigning course.");
+    }
+  }
+
   function renderTrainerPendingAssignments(assignments) {
     const status = document.getElementById('trainer-pending-status');
     const container = document.getElementById('trainer-pending-table-container');
@@ -2729,7 +2816,6 @@
       ));
       actions.appendChild(requestChangesButton);
       decisionCell.appendChild(actions);
-
     });
 
     wrapper.appendChild(table);
@@ -2794,6 +2880,29 @@
     }
   }
 
+  async function deleteApprovedStudent(studentId) {
+    if (!confirm('Admin approved this request. Permanently delete this student and their course progress?')) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Could not delete the approved student.');
+        return;
+      }
+      await renderTrainerDashboard();
+    } catch (error) {
+      alert('Network error while deleting the approved student.');
+    }
+  }
+
   async function requestStudentDeletion(studentId, reason, button) {
     const cleanReason = reason.trim();
     if (!cleanReason) {
@@ -2801,28 +2910,6 @@
       return;
     }
 
-    async function deleteApprovedStudent(studentId) {
-      if (!confirm('Admin approved this request. Permanently delete this student and their course progress?')) {
-        return;
-      }
-      try {
-        const response = await fetch(
-          `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
-          {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
-          }
-        );
-        const data = await response.json();
-        if (!response.ok) {
-          alert(data.detail || 'Could not delete the approved student.');
-          return;
-        }
-        await renderTrainerDashboard();
-      } catch (error) {
-        alert('Network error while deleting the approved student.');
-      }
-    }
     button.disabled = true;
     try {
       const response = await fetch('/trainer/request-student-deletion', {

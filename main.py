@@ -115,7 +115,7 @@ with engine.begin() as connection:
         "WHERE assignment_completed = 1 AND assignment_completed_at IS NULL"
     ))
 
-app = FastAPI(title="Enterprise LMS Portal")
+app = FastAPI(title="prodigiter LMS Portal")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1354,6 +1354,144 @@ def add_trainer_course_module(
         "order_index": module.order_index,
         "title": module.title,
     }
+class CourseAssignPayload(BaseModel):
+    student_id: str
+    course_id: str
+
+# 1. Fetch all students currently under the logged-in trainer
+@app.get("/trainer/my-students")
+def get_trainer_students(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    if current_user.role not in ["trainer", "admin"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # If admin, fetch all courses; if trainer, fetch only courses owned by this trainer
+    if current_user.role == "admin":
+        trainer_courses = db.query(models.Course).all()
+    else:
+        trainer_courses = db.query(models.Course).filter(models.Course.trainer_id == current_user.id).all()
+    
+    trainer_course_ids = [c.id for c in trainer_courses]
+
+    # Find all enrollments under these courses
+    enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.course_id.in_(trainer_course_ids)
+    ).all()
+
+    # Group students and collect their enrolled courses
+    students_dict = {}
+    for enr in enrollments:
+        student = db.query(models.User).filter(models.User.id == enr.student_id).first()
+        if not student:
+            continue
+        
+        if student.id not in students_dict:
+            students_dict[student.id] = {
+                "id": student.id,
+                "name": student.name,
+                "email": student.email,
+                "phone_number": student.phone_number,
+                "enrolled_course_ids": set(),
+                "enrolled_courses": []
+            }
+        course = next((c for c in trainer_courses if c.id == enr.course_id), None)
+        if course:
+            students_dict[student.id]["enrolled_course_ids"].add(course.id)
+            students_dict[student.id]["enrolled_courses"].append({
+                "id": course.id,
+                "title": course.title
+            })
+
+    # Prepare response: For each student, include eligible courses they are NOT yet enrolled in
+    result = []
+    for s_id, s_data in students_dict.items():
+        available_to_assign = [
+            {"id": c.id, "title": c.title}
+            for c in trainer_courses
+            if c.id not in s_data["enrolled_course_ids"]
+        ]
+        result.append({
+            "id": s_data["id"],
+            "name": s_data["name"],
+            "email": s_data["email"],
+            "phone_number": s_data["phone_number"],
+            "enrolled_courses": s_data["enrolled_courses"],
+            "available_to_assign": available_to_assign
+        })
+
+    return {
+        "students": result,
+        "trainer_courses": [{"id": c.id, "title": c.title} for c in trainer_courses]
+    }
+
+@app.post("/trainer/assign-course")
+def assign_course_to_student(
+    payload: CourseAssignPayload,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify target course exists
+    target_course = db.query(models.Course).filter(models.Course.id == payload.course_id).first()
+    if not target_course:
+        raise HTTPException(status_code=404, detail="Target course not found")
+
+    # ROLE VERIFICATION:
+    if current_user.role == "trainer":
+        # Rule 1: Trainer must own the course they want to assign
+        if target_course.trainer_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can only assign courses that you instruct.")
+
+        # Rule 2: Student must already be enrolled in at least one course taught by this trainer
+        trainer_course_ids = [
+            c.id for c in db.query(models.Course).filter(models.Course.trainer_id == current_user.id).all()
+        ]
+        is_student_under_trainer = db.query(models.Enrollment).filter(
+            models.Enrollment.student_id == payload.student_id,
+            models.Enrollment.course_id.in_(trainer_course_ids)
+        ).first()
+
+        if not is_student_under_trainer:
+            raise HTTPException(status_code=403, detail="You can only assign additional courses to students already enrolled under you.")
+
+    elif current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    # Note: Admin bypasses the checks above and has universal authority to assign any course to any student.
+
+    # Check if student is already enrolled in this exact course
+    existing_enr = db.query(models.Enrollment).filter(
+        models.Enrollment.student_id == payload.student_id,
+        models.Enrollment.course_id == payload.course_id
+    ).first()
+    if existing_enr:
+        raise HTTPException(status_code=400, detail="Student is already enrolled in this course.")
+
+    # Create the new enrollment
+    new_enrollment = models.Enrollment(
+        student_id=payload.student_id,
+        course_id=payload.course_id
+    )
+    db.add(new_enrollment)
+    db.flush()
+
+    # Initialize progress for the first module of the newly assigned course
+    first_module = db.query(models.Module).filter(
+        models.Module.course_id == payload.course_id
+    ).order_index if hasattr(models.Module, 'order_index') else None
+    
+    first_mod = db.query(models.Module).filter(
+        models.Module.course_id == payload.course_id
+    ).order_by(models.Module.order_index.asc()).first()
+
+    if first_mod:
+        new_prog = models.Progress(
+            enrollment_id=new_enrollment.id,
+            module_id=first_mod.id,
+            is_video_completed=False,
+            assignment_status="not_submitted"
+        )
+        db.add(new_prog)
+
+    db.commit()
+    return {"status": "success", "message": f"Successfully assigned '{target_course.title}' to the student."}
 
 
 @app.get("/trainer/pending-assignments")

@@ -1,0 +1,16 @@
+[
+  {
+    "role": "trainer",
+    "name": "Head Trainer",
+    "specialization": "Web Development",
+    "email": "trainer@lms.com",
+    "password": "trainer123"
+  },
+  {
+    "role": "admin",
+    "name": "System Administrator",
+    "specialization": null,
+    "email": "admin@lms.com",
+    "password": "admin123"
+  }
+]
