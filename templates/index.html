@@ -2903,6 +2903,34 @@
     }
   }
 
+  async function deleteApprovedStudent(studentId) {
+    if (!confirm('Admin approved this request. Permanently delete this student and their course progress?')) {
+      return;
+    }
+    const token = localStorage.getItem('jwt_token');
+    try {
+      const response = await fetch(
+        `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
+        {
+          method: 'POST',
+          headers: { 
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Could not delete the approved student.');
+        return;
+      }
+      alert(data.message || 'Student successfully removed.');
+      await renderTrainerDashboard();
+    } catch (error) {
+      alert('Network error while deleting the approved student.');
+    }
+  }
+
   async function requestStudentDeletion(studentId, reason, button) {
     const cleanReason = reason.trim();
     if (!cleanReason) {
@@ -2925,6 +2953,7 @@
         alert(data.detail || 'Could not submit deletion request.');
         return;
       }
+      alert("Deletion request sent to administrator.");
       await renderTrainerDashboard();
     } catch (err) {
       alert('Network error while submitting deletion request.');
