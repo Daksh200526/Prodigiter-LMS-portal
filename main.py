@@ -1294,8 +1294,8 @@ def create_trainer_course(
             assignment_link=module_payload.assignment_link.strip()
                 if module_payload.assignment_link else None,
         ))
-    db.commit()
-    _enroll_subject_students_in_course(db, course)
+    # A new course must NOT auto-enroll existing students.
+    # Trainers assign it explicitly via /trainer/assign-course.
     db.commit()
     return {
         "course_id": course.id,
