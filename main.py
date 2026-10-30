@@ -684,13 +684,13 @@ def student_dashboard(
                 ],
             })
 
-        courses_data.append({
-            "enrollment_id": enr.id,
-            "course_title": enr.course.title if enr.course else "Course",
-            "trainer_name": enr.course.trainer.name if enr.course and enr.course.trainer else "Trainer",
-            "completed_slots": completed_count,
-            "modules": modules_list
-        })
+        # courses_data.append({
+        #     "enrollment_id": enr.id,
+        #     "course_title": enr.course.title if enr.course else "Course",
+        #     "trainer_name": enr.course.trainer.name if enr.course and enr.course.trainer else "Trainer",
+        #     "completed_slots": completed_count,
+        #     "modules": modules_list
+        # })
 
     return {
         "course_subject": current_user.course_subject,
