@@ -1,0 +1,3039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prodigiter LMS Portal</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --sidebar-w: 320px;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .profile-link-btn {
+      background: #f1f5f9;
+      color: #1e293b;
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .profile-link-btn:hover {
+      background: #e2e8f0;
+    }
+    .logout-btn {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .logout-btn:hover {
+      background: #fca5a5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .container.auth-container {
+      min-height: calc(100vh - 60px);
+      margin: 0 auto;
+      box-sizing: border-box;
+      display: grid;
+      align-items: center;
+    }
+    .container.student-container {
+      width: 100%;
+      max-width: none;
+      margin: 1rem auto;
+      padding: 0 1rem;
+      box-sizing: border-box;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .role-tabs {
+      display: flex;
+      gap: 0.35rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 0.5rem 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #64748b;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    .tab-btn.active {
+      background: #eff6ff;
+      color: var(--primary);
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.6rem;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    button.submit-btn {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 0.5rem;
+    }
+    button.submit-btn:hover {
+      background: var(--primary-hover);
+    }
+    button.submit-btn:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .bottom-switch-link {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.92rem;
+      color: #64748b;
+    }
+    .bottom-switch-link a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .bottom-switch-link a:hover {
+      text-decoration: underline;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: #dcfce7; color: #166534; }
+    .badge-warning { background: #fef3c7; color: #854d0e; }
+    .badge-neutral { background: #e2e8f0; color: #334155; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+
+    /* Student Workspace Layout */
+    .student-layout {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+    .lessons-sidebar {
+      width: var(--sidebar-w);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 1rem;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-weight: bold;
+    }
+    .lesson-item {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .lesson-item:hover {
+      background: #f1f5f9;
+    }
+    .lesson-item.active {
+      background: #eff6ff;
+      border-left: 4px solid var(--primary);
+    }
+    .lesson-item.locked {
+      opacity: 0.65;
+      cursor: not-allowed;
+      background: #fafafa;
+    }
+    .video-workspace {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      background: #000;
+      border-radius: 6px;
+      margin-bottom: 1.25rem;
+    }
+    .video-container iframe, .video-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .assignment-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+    .lesson-community-tabs {
+      display: flex;
+      gap: 1.25rem;
+      margin: 0 -0.25rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .lesson-community-tab {
+      padding: 0.75rem 0.25rem;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -1px;
+      background: transparent;
+      color: #64748b;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lesson-community-tab.active {
+      border-bottom-color: var(--text);
+      color: #1e293b;
+    }
+    .lesson-community-tab:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .lesson-community-panel {
+      min-width: 0;
+    }
+    .progress-track {
+      height: 0.7rem;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #16a34a;
+      transition: width 0.2s ease;
+    }
+    .assignment-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      padding: 0.65rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--primary);
+      font-weight: 600;
+      margin-top: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .assignment-link-btn:hover {
+      background: #eff6ff;
+    }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-box {
+      background: white;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 460px;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    .modal-close-btn {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      color: #64748b;
+    }
+    .trainer-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 400px);
+      gap: 1.5rem;
+      align-items: start;
+    }
+    #trainer-courses {
+      min-width: 0;
+    }
+    .trainer-course-card,
+    .trainer-pending-section {
+      margin-top: 1.25rem;
+      padding: 1.25rem;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .trainer-course-card h4,
+    .trainer-pending-section h4 {
+      margin: 0;
+    }
+    #trainer-view h3,
+    #trainer-view h4,
+    #trainer-view h5,
+    #trainer-view h6,
+    .trainer-pending-table th {
+      text-align: center;
+    }
+    .trainer-course-summary {
+      margin: 0.5rem 0 1.25rem;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .trainer-lessons {
+      display: grid;
+      gap: 1rem;
+    }
+    .trainer-lesson-card,
+    .trainer-question-card {
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .trainer-lesson-heading,
+    .trainer-question-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+    .trainer-lesson-heading h5,
+    .trainer-question-heading strong {
+      margin: 0;
+    }
+    .trainer-lesson-prompt {
+      margin: 0.75rem 0;
+      color: #475569;
+      white-space: pre-wrap;
+    }
+    .trainer-resource-link {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 0.75rem;
+      padding: 0.55rem 0.8rem;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .trainer-resource-link:hover {
+      background: #dbeafe;
+    }
+    .trainer-lesson-questions {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .trainer-lesson-questions h6 {
+      margin: 0;
+      color: #475569;
+      font-size: 0.85rem;
+    }
+    .trainer-question-card p {
+      margin: 0.75rem 0;
+      white-space: pre-wrap;
+    }
+    .trainer-question-card textarea {
+      width: 100%;
+      min-height: 4rem;
+      box-sizing: border-box;
+      padding: 0.65rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font: inherit;
+      resize: vertical;
+    }
+    .trainer-question-card button {
+      margin-top: 0.65rem;
+    }
+    .trainer-pending-section {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .trainer-pending-table-wrap {
+      width: 100%;
+      margin-top: 0.75rem;
+      overflow-x: auto;
+    }
+    .trainer-pending-table {
+      width: 100%;
+      min-width: 600px;
+      border-collapse: separate;
+      border-spacing: 0 0.5rem;
+      text-align: left;
+    }
+    .trainer-pending-table th {
+      padding: 0.5rem;
+      color: #64748b;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .trainer-pending-table td {
+      padding: 0.65rem 0.5rem;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .trainer-pending-table td:first-child {
+      border-left: 1px solid var(--border);
+      border-radius: 6px 0 0 6px;
+    }
+    .trainer-pending-table td:last-child {
+      border-right: 1px solid var(--border);
+      border-radius: 0 6px 6px 0;
+    }
+    .trainer-pending-table p {
+      margin: 0.25rem 0;
+    }
+    .trainer-pending-table textarea {
+      width: 100%;
+      min-width: 150px;
+      min-height: 3.5rem;
+      box-sizing: border-box;
+      padding: 0.55rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font: inherit;
+      resize: vertical;
+    }
+    .trainer-pending-table .trainer-resource-link {
+      margin-top: 0;
+      white-space: nowrap;
+    }
+    .trainer-pending-table .trainer-assignment-actions {
+      display: grid;
+      gap: 0.4rem;
+      min-width: 145px;
+    }
+    .trainer-pending-table .trainer-assignment-actions button {
+      width: 100%;
+      font-size: 0.85rem;
+    }
+    .trainer-assignment-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .trainer-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+    .trainer-action-btn {
+      width: 100%;
+      padding: 0.9rem 1rem;
+      text-align: left;
+      white-space: normal;
+    }
+    .trainer-modal-box {
+      max-width: 680px;
+    }
+    .student-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .student-table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: separate;
+      border-spacing: 0 0.4rem;
+      text-align: left;
+    }
+    .student-table th {
+      padding: 0.65rem 0.75rem;
+      color: #64748b;
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .student-table td {
+      padding: 0.75rem;
+      background: #fff;
+      vertical-align: middle;
+    }
+    .student-table td:first-child {
+      border-radius: 8px 0 0 8px;
+      font-weight: 600;
+    }
+    .student-table td:last-child {
+      border-radius: 0 8px 8px 0;
+    }
+    .student-progress {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 3px;
+      min-width: 120px;
+    }
+    .student-progress-segment {
+      height: 0.65rem;
+      border-radius: 2px;
+      background: #e2e8f0;
+    }
+    .student-progress-segment.complete {
+      background: #16a34a;
+    }
+    .student-delete-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border: 0;
+      border-radius: 6px;
+      background: #fee2e2;
+      color: #b91c1c;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+    .student-delete-btn:disabled {
+      background: #f1f5f9;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+    .student-delete-form-cell {
+      background: #f8fafc !important;
+      border-radius: 8px;
+    }
+    .student-delete-reason {
+      width: 100%;
+      min-height: 4rem;
+      box-sizing: border-box;
+      margin: 0.5rem 0;
+    }
+    @media (max-width: 760px) {
+      .trainer-layout {
+        grid-template-columns: 1fr;
+      }
+      .trainer-actions {
+        grid-row: 1;
+      }
+      .student-layout {
+        flex-direction: column;
+      }
+      .lessons-sidebar,
+      .video-workspace {
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
+    @media (max-height: 700px) {
+      .container.auth-container {
+        align-items: start;
+        padding-top: 1rem;
+      }
+    }
+    @media (max-width: 480px) {
+      .trainer-course-card,
+      .trainer-pending-section {
+        padding: 1rem;
+      }
+      .trainer-lesson-heading {
+        flex-direction: column;
+      }
+      .video-workspace {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h2 style="margin: 0; font-size: 1.25rem;">Prodigiter</h2>
+  <div class="nav-actions">
+    <button id="profile-btn" class="profile-link-btn hidden" onclick="openProfileModal()">My Profile</button>
+    <button id="logout-btn" class="logout-btn hidden" onclick="handleLogout()">Logout</button>
+  </div>
+</header>
+
+<!-- User Profile Modal -->
+<div id="profile-modal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <button class="modal-close-btn" aria-label="Close profile" onclick="closeProfileModal()">&times;</button>
+    <h3 id="profile-modal-title" style="margin-top: 0;">My Profile</h3>
+    <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
+    <div id="profile-details-content">Loading profile...</div>
+  </div>
+</div>
+
+<div class="container auth-container">
+  <!-- Auth Section -->
+  <div id="auth-section" class="card" style="max-width: 500px; margin: 0 auto;">
+    
+    <!-- Login Views Wrapper -->
+    <div id="login-container">
+      <div class="role-tabs">
+        <button id="tab-admin" class="tab-btn active" onclick="switchLoginRole('admin')">Admin</button>
+        <button id="tab-trainer" class="tab-btn" onclick="switchLoginRole('trainer')">Trainer</button>
+        <button id="tab-student" class="tab-btn" onclick="switchLoginRole('student')">Student Password</button>
+        <button id="tab-otp" class="tab-btn" onclick="switchLoginRole('student-otp')">OTP Login</button>
+      </div>
+
+      <!-- Password Login Form -->
+      <form id="password-login-box" autocomplete="off" onsubmit="event.preventDefault(); submitPasswordLogin();">
+        <!-- Hidden decoy inputs to trap browser autofill engines -->
+        <input type="text" style="display:none;" tabindex="-1" autocomplete="username">
+        <input type="password" style="display:none;" tabindex="-1" autocomplete="current-password">
+
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="text" id="login-email" name="fake_email_field" placeholder="" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" value="">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" name="fake_pass_field" placeholder="••••••••" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');" value="">
+        </div>
+        <button type="submit" class="submit-btn">Sign In</button>
+      </form>
+
+      <!-- OTP Login Form -->
+      <div id="otp-login-box" class="hidden">
+        <div class="form-group">
+          <label for="otp-phone">Registered Phone Number</label>
+          <input type="tel" id="otp-phone" placeholder="10-digit Indian mobile number" inputmode="tel" autocomplete="tel" maxlength="13" value="">
+        </div>
+        <button id="request-otp-btn" type="button" class="submit-btn" onclick="requestOTP()">Send Verification OTP</button>
+
+        <div id="verify-otp-subbox" class="hidden" style="margin-top: 1.5rem;">
+          <div class="form-group">
+            <label for="otp-code">Enter the 6-digit verification code</label>
+            <input type="text" id="otp-code" placeholder="123456" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" value="">
+          </div>
+          <button id="verify-otp-btn" type="button" class="submit-btn" style="background:#059669;" onclick="verifyOTP()">Verify Code & Enter</button>
+        </div>
+      </div>
+
+      <!-- Bottom Center Registration Trigger -->
+      <div class="bottom-switch-link">
+        <span>Not yet registered? </span><a onclick="showRegistrationView()">Click here to register</a>
+        <br><a onclick="showForgotPasswordView()">Forgot password?</a>
+      </div>
+    </div>
+
+    <div id="forgot-password-container" class="hidden">
+      <h3 style="margin-top: 0; margin-bottom: 1.25rem;">Reset Password</h3>
+      <div class="form-group">
+        <label for="reset-phone">Registered phone number</label>
+        <input type="tel" id="reset-phone" placeholder="10-digit Indian mobile number" inputmode="tel" autocomplete="tel" maxlength="13">
+      </div>
+      <button id="request-reset-otp-btn" type="button" class="submit-btn" onclick="requestPasswordResetOTP()">Send Verification OTP</button>
+
+      <div id="reset-password-form" class="hidden" style="margin-top: 1.5rem;">
+        <div class="form-group">
+          <label for="reset-otp">6-digit verification code</label>
+          <input type="text" id="reset-otp" placeholder="123456" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code">
+        </div>
+        <div class="form-group">
+          <label for="reset-new-password">New password (at least 8 characters)</label>
+          <input type="password" id="reset-new-password" minlength="8" maxlength="1024" autocomplete="new-password">
+        </div>
+        <button id="reset-password-btn" type="button" class="submit-btn" style="background:#059669;" onclick="resetPassword()">Reset Password</button>
+      </div>
+      <div class="bottom-switch-link">
+        <a onclick="showLoginView()">Back to sign in</a>
+      </div>
+    </div>
+
+    <!-- Student Registration Container -->
+    <div id="register-container" class="hidden">
+      <h3 style="margin-top: 0; margin-bottom: 1.25rem;">Student Registration</h3>
+      <form autocomplete="off" onsubmit="event.preventDefault(); submitRegistration();">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="reg-name" placeholder="John Doe" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="reg-email" placeholder="student@example.com" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="reg-course-subject">Choose your course</label>
+          <select id="reg-course-subject" required>
+            <option value="">Select a course</option>
+            <option value="Web Development">Web Development</option>
+            <option value="Python Programming">Python Programming</option>
+            <option value="Data Science">Data Science</option>
+            <option value="Java Programming">Java Programming</option>
+            <option value="Cloud Computing">Cloud Computing</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mobile Number (10 digits)</label>
+          <input type="text" id="reg-phone" placeholder="9876543210" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Create Password</label>
+          <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <button type="submit" class="submit-btn" style="background:#059669;">Create Student Account</button>
+      </form>
+
+      <!-- Bottom Center Login Trigger -->
+      <div class="bottom-switch-link">
+        <span>Already have an account? </span><a onclick="showLoginView()">Click here to sign in</a>
+        <br><a onclick="showForgotPasswordView()">Forgot password?</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Student Workspace Layout -->
+  <div id="student-view" class="student-layout hidden">
+    <!-- Left Sidebar: Lessons -->
+    <div class="lessons-sidebar">
+      <div class="sidebar-header" id="course-title-header">Course Modules</div>
+      <div id="course-trainer-name" style="padding: 0.65rem 1rem; color: #64748b; font-size: 0.9rem;">
+        Trainer: —
+      </div>
+      <div id="student-course-picker" class="form-group hidden" style="padding: 0 1rem; margin: 0.75rem 0;">
+        <label for="student-course-select">Your selected course</label>
+        <select id="student-course-select" aria-label="Choose a course">
+        </select>
+      </div>
+      <div id="lessons-list">Loading modules...</div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="video-workspace">
+      <div id="video-content-pane">
+        <div style="display:flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
+          <h3 id="current-lesson-title" style="margin: 0;">Select a Lesson</h3>
+          <span id="video-status-badge" class="badge badge-neutral">Status: Unwatched</span>
+        </div>
+        
+        <div id="media-player-wrapper" class="video-container">
+          <!-- Dynamic Video/Embed inserted here -->
+        </div>
+
+        <section class="assignment-card" aria-labelledby="lesson-questions-heading">
+          <div class="lesson-community-tabs" role="tablist" aria-label="Lesson community">
+            <button id="lesson-qa-tab" class="lesson-community-tab active" type="button" role="tab"
+              aria-selected="true" aria-controls="lesson-qa-panel"
+              onclick="switchLessonCommunityTab('qa')">Q&amp;A</button>
+            <button id="lesson-announcements-tab" class="lesson-community-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="lesson-announcements-panel" tabindex="-1"
+              onclick="switchLessonCommunityTab('announcements')">Announcements</button>
+          </div>
+          <div id="lesson-qa-panel" class="lesson-community-panel" role="tabpanel"
+            aria-labelledby="lesson-qa-tab">
+            <h4 id="lesson-questions-heading" style="margin-top: 0;">Lesson questions &amp; answers</h4>
+            <div id="lesson-questions-list"></div>
+            <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
+              <label for="lesson-question-input">Ask the course trainer</label>
+              <textarea id="lesson-question-input" maxlength="2000" required style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
+              <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Post question</button>
+            </form>
+          </div>
+          <div id="lesson-announcements-panel" class="lesson-community-panel hidden" role="tabpanel"
+            aria-labelledby="lesson-announcements-tab" hidden>
+            <h4 style="margin-top: 0;">Announcements</h4>
+            <p>No announcements have been posted yet.</p>
+          </div>
+        </section>
+
+        <div id="lesson-assignment-card" class="assignment-card">
+          <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Lesson Assignment</h4>
+          <p id="assignment-prompt-text" style="color: #475569; margin: 0.5rem 0;"></p>
+          
+          <div id="assignment-link-container"></div>
+          <p id="trainer-feedback-text" class="hidden" style="color:#475569;"></p>
+          <div class="form-group">
+            <label for="assignment-submission-text">Your submission (description or work link)</label>
+            <textarea id="assignment-submission-text" maxlength="4000" required disabled style="width:100%; min-height:5rem; box-sizing:border-box;"></textarea>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
+            <button id="submit-assignment-btn" class="submit-btn" disabled style="width: auto; padding: 0.6rem 1.25rem; margin: 0;" onclick="submitAssignment()">
+              Mark Assignment Completed
+            </button>
+            <span id="assignment-status-text" class="badge badge-neutral">Status: Not Submitted</span>
+          </div>
+        </div>
+
+        <div id="task-review-qr" class="assignment-card hidden"></div>
+      </div>
+
+      <div id="student-no-courses" class="hidden">
+        <h3>No Enrolled Courses Found</h3>
+        <p>Your account is active, but you have not yet been assigned to an active curriculum. Please contact your administrator.</p>
+      </div>
+
+      <div id="student-pending-alert" class="hidden">
+        <h3>Account Clearance Pending</h3>
+        <p style="color: #b45309; line-height: 1.5;">Your registration has been submitted and is awaiting administrative clearance. Once an administrator approves your account in the admin panel, your curriculum will unlock.</p>
+      </div>
+
+      <div id="student-no-unlocked-lessons" class="hidden">
+        <h3>No Lessons Available Yet</h3>
+        <p>Your course has no unlocked lessons yet. Complete the required prior work or contact your trainer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin View -->
+  <div id="admin-view" class="card hidden">
+    <h3>Admin Management Portal</h3>
+    <div id="admin-metrics" style="display:flex; gap:1rem; margin-bottom: 1.5rem;"></div>
+    <button type="button" class="submit-btn" style="max-width: 240px;" onclick="openCreateTrainerModal()">
+      Add a New Trainer
+    </button>
+    <h4>Pending Candidate Access Approvals</h4>
+    <div id="admin-pending-table-container">Loading approvals...</div>
+    <section>
+      <h4>Student Progress</h4>
+      <div id="admin-student-list">Loading students...</div>
+    </section>
+    <section class="assignment-card">
+      <h4 style="margin-top: 0;">Trainer requests to delete students</h4>
+      <div id="admin-pending-deletions">Loading requests...</div>
+    </section>
+  </div>
+
+  <!-- Trainer View -->
+  <div id="trainer-view" class="card hidden">
+    <h3>Trainer Dashboard</h3>
+    <div class="trainer-layout">
+      <main id="trainer-courses">Loading student and assignment details...</main>
+      <aside class="trainer-actions" aria-label="Course actions">
+        <button type="button" class="submit-btn trainer-action-btn" onclick="openAddLessonModal()">
+          Add lesson to existing course
+        </button>
+        <button type="button" class="profile-link-btn trainer-action-btn" onclick="openNewCourseModal()">
+          Add new course
+        </button>
+        <section id="trainer-pending-assignments" class="trainer-pending-section" aria-labelledby="trainer-pending-heading">
+          <h4 id="trainer-pending-heading">Assignments awaiting evaluation</h4>
+          <p id="trainer-pending-status" class="trainer-course-summary">Loading pending assignments...</p>
+          <div id="trainer-pending-table-container"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div id="admin-trainer-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="admin-trainer-modal-title">
+  <div class="modal-box trainer-modal-box">
+    <button type="button" class="modal-close-btn" aria-label="Close" onclick="closeTrainerModal('admin-trainer-modal')">&times;</button>
+    <h3 id="admin-trainer-modal-title">Create Trainer Account</h3>
+    <form id="admin-trainer-form" onsubmit="event.preventDefault(); createTrainerAccount();">
+      <div class="form-group">
+        <label for="admin-trainer-name">Trainer name</label>
+        <input id="admin-trainer-name" type="text" maxlength="100" autocomplete="name" required>
+      </div>
+      <div class="form-group">
+        <label for="admin-trainer-email">Trainer email</label>
+        <input id="admin-trainer-email" type="email" maxlength="191" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label for="admin-trainer-phone">Trainer mobile number (for OTP recovery)</label>
+        <input id="admin-trainer-phone" type="tel" maxlength="13" inputmode="tel" autocomplete="tel" required>
+      </div>
+      <div class="form-group">
+        <label for="admin-trainer-specialization">Course specialization</label>
+        <select id="admin-trainer-specialization" required>
+          <option value="">Select a course specialization</option>
+          <option value="Web Development">Web Development</option>
+          <option value="Python Programming">Python Programming</option>
+          <option value="Data Science">Data Science</option>
+          <option value="Java Programming">Java Programming</option>
+          <option value="Cloud Computing">Cloud Computing</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="admin-trainer-password">Initial password (at least 8 characters)</label>
+        <input id="admin-trainer-password" type="password" minlength="8" maxlength="1024" autocomplete="new-password" required>
+      </div>
+      <button id="admin-create-trainer-btn" type="submit" class="submit-btn">Create trainer account</button>
+    </form>
+    <p id="admin-trainer-result" aria-live="polite"></p>
+  </div>
+</div>
+
+<div id="trainer-course-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="trainer-course-modal-title">
+  <div class="modal-box trainer-modal-box">
+    <button type="button" class="modal-close-btn" aria-label="Close" onclick="closeTrainerModal('trainer-course-modal')">&times;</button>
+    <h3 id="trainer-course-modal-title">Add new course</h3>
+    <form id="trainer-course-form" onsubmit="event.preventDefault(); createTrainerCourse();">
+      <div class="form-group">
+        <label for="trainer-course-title">Course title</label>
+        <input id="trainer-course-title" type="text" maxlength="255" required>
+      </div>
+      <div class="form-group">
+        <label for="trainer-course-description">Course description</label>
+        <textarea id="trainer-course-description" style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
+      </div>
+      <div id="trainer-course-lessons"></div>
+      <button type="button" class="profile-link-btn" onclick="addTrainerLesson('trainer-course-lessons')">Add another lesson</button>
+      <button type="submit" class="submit-btn">Create course</button>
+    </form>
+  </div>
+</div>
+
+<div id="trainer-lesson-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="trainer-lesson-modal-title">
+  <div class="modal-box trainer-modal-box">
+    <button type="button" class="modal-close-btn" aria-label="Close" onclick="closeTrainerModal('trainer-lesson-modal')">&times;</button>
+    <h3 id="trainer-lesson-modal-title">Add lesson to existing course</h3>
+    <form id="trainer-existing-lesson-form" onsubmit="event.preventDefault(); submitLessonToCourse();">
+      <div class="form-group">
+        <label for="trainer-existing-course">Your courses</label>
+        <select id="trainer-existing-course" required onchange="updateExistingLessonOrder()"></select>
+      </div>
+      <p id="trainer-existing-lesson-order"></p>
+      <div id="trainer-existing-lesson-fields"></div>
+      <button type="submit" class="submit-btn">Add lesson</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  let activeStudentData = null;
+  let activeEnrollmentId = null;
+  let activeModuleId = null;
+  const openedAssignmentLinks = new Set();
+  let studentCourseOptions = [];
+  let youtubeApiPromise = null;
+  let trainerDashboardData = { courses: [] };
+  let studentLessonRefreshInProgress = false;
+
+  function safeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    try {
+      const url = new URL(value.trim(), window.location.href);
+      return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function getYouTubeVideoId(value) {
+    const url = safeHttpUrl(value);
+    if (!url) return null;
+
+    const host = url.hostname.toLowerCase();
+    let videoId = null;
+    if (host === 'youtu.be') {
+      videoId = url.pathname.split('/').filter(Boolean)[0];
+    } else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      videoId = url.searchParams.get('v');
+      if (!videoId) {
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        if (['embed', 'shorts', 'live'].includes(pathParts[0])) {
+          videoId = pathParts[1];
+        }
+      }
+    }
+
+    return videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : null;
+  }
+
+  function loadYouTubeApi() {
+    if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+    if (!youtubeApiPromise) {
+      youtubeApiPromise = new Promise((resolve, reject) => {
+        const previousCallback = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+          try {
+            if (typeof previousCallback === 'function') previousCallback();
+          } finally {
+            resolve(window.YT);
+          }
+        };
+
+        let script = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+        if (!script) {
+          script = document.createElement('script');
+          script.src = 'https://www.youtube.com/iframe_api';
+        }
+        script.addEventListener('error', () => {
+          youtubeApiPromise = null;
+          script.remove();
+          reject(new Error('Failed to load the YouTube player API.'));
+        }, { once: true });
+        if (!script.isConnected) document.head.appendChild(script);
+      });
+    }
+    return youtubeApiPromise;
+  }
+
+  function createBadge(text, className) {
+    const badge = document.createElement('span');
+    badge.className = `badge ${className}`;
+    badge.textContent = text;
+    return badge;
+  }
+
+  function renderProfileDetails(profile) {
+    const container = document.getElementById('profile-details-content');
+    container.replaceChildren();
+
+    const details = document.createElement('div');
+    details.style.lineHeight = '1.8';
+    const addRow = (label, value) => {
+      const row = document.createElement('p');
+      const labelElement = document.createElement('strong');
+      labelElement.textContent = `${label}: `;
+      row.append(labelElement, document.createTextNode(String(value)));
+      details.appendChild(row);
+    };
+
+    addRow('Name', profile.name || 'Not provided');
+    addRow('Email', profile.email || 'Not provided');
+    addRow('Phone Number', profile.phone_number || 'Not registered');
+    if (profile.role === 'trainer' || profile.role === 'admin') {
+      addRow('Specialization', profile.specialization || 'Not specified');
+    } else {
+      addRow('Selected Course', profile.course_subject || 'Not selected');
+    }
+    if (!profile.phone_number && (profile.role === 'student' || profile.role === 'trainer')) {
+      renderRecoveryPhoneSetup(details);
+    }
+
+    const roleRow = document.createElement('p');
+    const roleLabel = document.createElement('strong');
+    roleLabel.textContent = 'Role: ';
+    roleRow.append(roleLabel, createBadge(String(profile.role || '').toUpperCase(), 'badge-neutral'));
+    details.appendChild(roleRow);
+
+    if (profile.role === 'student') {
+      const clearanceRow = document.createElement('p');
+      const clearanceLabel = document.createElement('strong');
+      clearanceLabel.textContent = 'Clearance Status: ';
+      clearanceRow.append(
+        clearanceLabel,
+        createBadge(profile.is_access_granted ? 'Approved' : 'Pending Clearance',
+          profile.is_access_granted ? 'badge-success' : 'badge-warning')
+      );
+      details.appendChild(clearanceRow);
+      addRow('Enrolled Courses', Array.isArray(profile.courses) && profile.courses.length
+        ? profile.courses.join(', ')
+        : 'None');
+    }
+    container.appendChild(details);
+  }
+
+  function renderRecoveryPhoneSetup(container) {
+    const section = document.createElement('section');
+    section.className = 'assignment-card';
+    const heading = document.createElement('h4');
+    heading.textContent = 'Add a recovery phone number';
+    const phoneLabel = document.createElement('label');
+    phoneLabel.htmlFor = 'recovery-phone-input';
+    phoneLabel.textContent = '10-digit Indian mobile number';
+    const phoneInput = document.createElement('input');
+    phoneInput.id = 'recovery-phone-input';
+    phoneInput.type = 'tel';
+    phoneInput.inputMode = 'tel';
+    phoneInput.maxLength = 13;
+    phoneInput.autocomplete = 'tel';
+    const requestButton = document.createElement('button');
+    requestButton.type = 'button';
+    requestButton.className = 'submit-btn';
+    requestButton.textContent = 'Send verification OTP';
+    requestButton.addEventListener('click', requestRecoveryPhoneOTP);
+
+    const otpLabel = document.createElement('label');
+    otpLabel.id = 'recovery-phone-otp-label';
+    otpLabel.htmlFor = 'recovery-phone-otp';
+    otpLabel.textContent = '6-digit verification code';
+    otpLabel.classList.add('hidden');
+    const otpInput = document.createElement('input');
+    otpInput.id = 'recovery-phone-otp';
+    otpInput.type = 'text';
+    otpInput.inputMode = 'numeric';
+    otpInput.maxLength = 6;
+    otpInput.autocomplete = 'one-time-code';
+    otpInput.classList.add('hidden');
+    const saveButton = document.createElement('button');
+    saveButton.id = 'save-recovery-phone-btn';
+    saveButton.type = 'button';
+    saveButton.className = 'submit-btn';
+    saveButton.textContent = 'Save recovery number';
+    saveButton.classList.add('hidden');
+    saveButton.addEventListener('click', saveRecoveryPhone);
+    const status = document.createElement('p');
+    status.id = 'recovery-phone-status';
+    status.setAttribute('aria-live', 'polite');
+
+    section.append(
+      heading,
+      phoneLabel,
+      phoneInput,
+      requestButton,
+      otpLabel,
+      otpInput,
+      saveButton,
+      status
+    );
+    container.appendChild(section);
+  }
+
+  function hardClearInputs() {
+    ['login-email', 'login-password', 'otp-phone', 'otp-code'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = '';
+        el.setAttribute('value', '');
+      }
+    });
+    const verifyBox = document.getElementById('verify-otp-subbox');
+    if (verifyBox) verifyBox.classList.add('hidden');
+  }
+
+  function switchLoginRole(role) {
+    document.querySelectorAll('.role-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+    const tabElement = document.getElementById(`tab-${role === 'student-otp' ? 'otp' : role}`);
+    if (tabElement) tabElement.classList.add('active');
+
+    hardClearInputs();
+
+    const passBox = document.getElementById('password-login-box');
+    const otpBox = document.getElementById('otp-login-box');
+
+    if (role === 'student-otp') {
+      passBox.classList.add('hidden');
+      otpBox.classList.remove('hidden');
+    } else {
+      passBox.classList.remove('hidden');
+      otpBox.classList.add('hidden');
+    }
+  }
+
+  function showRegistrationView() {
+    document.getElementById('login-container').classList.add('hidden');
+    document.getElementById('forgot-password-container').classList.add('hidden');
+    document.getElementById('register-container').classList.remove('hidden');
+    ['reg-name', 'reg-email', 'reg-phone', 'reg-password', 'reg-course-subject'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
+  function showLoginView() {
+    document.getElementById('register-container').classList.add('hidden');
+    document.getElementById('forgot-password-container').classList.add('hidden');
+    ['reset-phone', 'reset-otp', 'reset-new-password'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('reset-password-form').classList.add('hidden');
+    document.getElementById('login-container').classList.remove('hidden');
+    switchLoginRole('student');
+  }
+
+  function showForgotPasswordView() {
+    document.getElementById('login-container').classList.add('hidden');
+    document.getElementById('register-container').classList.add('hidden');
+    document.getElementById('forgot-password-container').classList.remove('hidden');
+    ['reset-phone', 'reset-otp', 'reset-new-password'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('reset-password-form').classList.add('hidden');
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    switchLoginRole('admin');
+    // Repeated delayed sweep to kill browser autofill attempts
+    setTimeout(hardClearInputs, 50);
+    setTimeout(hardClearInputs, 200);
+    setTimeout(hardClearInputs, 500);
+  });
+
+  async function submitPasswordLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) {
+      alert("Please enter both email and password.");
+      return;
+    }
+
+    try {
+      const res = await fetch('/auth/login-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Authentication failed");
+        return;
+      }
+      handleLoginSuccess(data.access_token, data.role);
+    } catch (err) {
+      alert("Connection error occurred.");
+    }
+  }
+
+  async function submitRegistration() {
+    const name = document.getElementById('reg-name').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const phone_number = document.getElementById('reg-phone').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const course_subject = document.getElementById('reg-course-subject').value;
+
+    if (!name || !email || !phone_number || !password || !course_subject) {
+      alert("Please fill in all fields and choose a course.");
+      return;
+    }
+
+    try {
+      const res = await fetch('/auth/register-student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone_number, password, course_subject })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Registration failed");
+        return;
+      }
+
+      alert("Registration submitted! Your account is now pending admin clearance.");
+      handleLoginSuccess(data.access_token, data.role);
+    } catch (err) {
+      alert("Connection error during registration.");
+    }
+  }
+
+  async function requestOTP() {
+    const phone = document.getElementById('otp-phone').value.trim();
+    const button = document.getElementById('request-otp-btn');
+    if (!phone) {
+      alert("Please enter a phone number.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Requesting OTP...';
+    try {
+      const res = await fetch('/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Error requesting OTP");
+        return;
+      }
+      alert(data.development_otp
+        ? `${data.message}\n\nDevelopment OTP: ${data.development_otp}`
+        : data.message);
+      document.getElementById('verify-otp-subbox').classList.remove('hidden');
+    } catch (err) {
+      alert("Network request error.");
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Send Verification OTP';
+    }
+  }
+
+  async function requestPasswordResetOTP() {
+    const phone = document.getElementById('reset-phone').value.trim();
+    const button = document.getElementById('request-reset-otp-btn');
+    if (!phone) {
+      alert("Please enter your registered phone number.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Requesting OTP...';
+    try {
+      const res = await fetch('/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Error requesting verification code");
+        return;
+      }
+      const devOtp = data.development_otp
+        ? `\n\nDevelopment OTP: ${data.development_otp}`
+        : '';
+      alert(`If this number is registered, a verification code was requested.${devOtp}`);
+      document.getElementById('reset-password-form').classList.remove('hidden');
+    } catch (err) {
+      alert("Network request error.");
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Send Verification OTP';
+    }
+  }
+
+  async function resetPassword() {
+    const phone = document.getElementById('reset-phone').value.trim();
+    const otp = document.getElementById('reset-otp').value.trim();
+    const newPassword = document.getElementById('reset-new-password').value;
+    const button = document.getElementById('reset-password-btn');
+    if (!phone || !otp || !newPassword) {
+      alert("Enter your phone number, verification code, and new password.");
+      return;
+    }
+    if (!/^\d{6}$/.test(otp)) {
+      alert("Enter the 6-digit verification code.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      alert("Your new password must be at least 8 characters.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Resetting...';
+    try {
+      const res = await fetch('/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone_number: phone,
+          otp_code: otp,
+          new_password: newPassword
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Password reset failed.");
+        return;
+      }
+      alert(data.message);
+      showLoginView();
+    } catch (err) {
+      alert("Network request error.");
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Reset Password';
+    }
+  }
+
+  async function verifyOTP() {
+    const phone = document.getElementById('otp-phone').value.trim();
+    const code = document.getElementById('otp-code').value.trim();
+    const button = document.getElementById('verify-otp-btn');
+    if (!phone || !code) {
+      alert("Please provide both phone number and OTP code.");
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      alert("Enter the 6-digit OTP sent by SMS.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Verifying...';
+    try {
+      const res = await fetch('/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone, otp_code: code })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Verification failed");
+        return;
+      }
+      handleLoginSuccess(data.access_token, data.role);
+    } catch (err) {
+      alert("Network request error.");
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Verify Code & Enter';
+    }
+  }
+
+  function handleLoginSuccess(token, role) {
+    localStorage.setItem('jwt_token', token);
+    localStorage.setItem('user_role', role);
+
+    const appContainer = document.getElementById('auth-section').parentElement;
+    appContainer.classList.remove('auth-container', 'student-container');
+    if (role === 'student') appContainer.classList.add('student-container');
+    document.getElementById('auth-section').classList.add('hidden');
+    document.getElementById('logout-btn').classList.remove('hidden');
+    const profileButton = document.getElementById('profile-btn');
+    profileButton.textContent = role === 'student' ? 'Student Profile' : 'My Profile';
+    profileButton.classList.remove('hidden');
+    document.getElementById('profile-modal-title').textContent =
+      role === 'student' ? 'Student Profile' : `${role === 'trainer' ? 'Trainer' : 'Admin'} Profile`;
+
+    if (role === 'student') {
+      renderStudentDashboard();
+    } else if (role === 'admin') {
+      renderAdminDashboard();
+    } else {
+      document.getElementById('trainer-view').classList.remove('hidden');
+      renderTrainerDashboard();
+    }
+  }
+
+  function handleLogout() {
+    localStorage.clear();
+    sessionStorage.clear();
+    location.reload();
+  }
+
+  async function openProfileModal() {
+    const token = localStorage.getItem('jwt_token');
+    document.getElementById('profile-modal').classList.remove('hidden');
+    document.getElementById('profile-details-content').textContent = 'Loading profile...';
+
+    try {
+      const res = await fetch('/user/profile-details', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const profile = await res.json();
+
+      if (!res.ok) throw new Error('Failed to load profile details.');
+      renderProfileDetails(profile);
+    } catch (err) {
+      document.getElementById('profile-details-content').textContent = "Failed to load profile details.";
+    }
+  }
+
+  async function requestRecoveryPhoneOTP() {
+    const phone = document.getElementById('recovery-phone-input').value.trim();
+    const status = document.getElementById('recovery-phone-status');
+    if (!phone) {
+      status.textContent = 'Enter a recovery phone number.';
+      return;
+    }
+    try {
+      const res = await fetch('/auth/request-recovery-phone-otp', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ phone_number: phone })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = data.detail || 'Could not request a verification code.';
+        return;
+      }
+      document.getElementById('recovery-phone-otp').classList.remove('hidden');
+      document.getElementById('recovery-phone-otp-label').classList.remove('hidden');
+      document.getElementById('save-recovery-phone-btn').classList.remove('hidden');
+      status.textContent = data.message
+        + (data.development_otp ? ` Development OTP: ${data.development_otp}` : '');
+    } catch (err) {
+      status.textContent = 'Network request error.';
+    }
+  }
+
+  async function saveRecoveryPhone() {
+    const phone = document.getElementById('recovery-phone-input').value.trim();
+    const otp = document.getElementById('recovery-phone-otp').value.trim();
+    const status = document.getElementById('recovery-phone-status');
+    if (!/^\d{6}$/.test(otp)) {
+      status.textContent = 'Enter the 6-digit verification code.';
+      return;
+    }
+    try {
+      const res = await fetch('/user/recovery-phone', {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ phone_number: phone, otp_code: otp })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = data.detail || 'Could not save the recovery number.';
+        return;
+      }
+      await openProfileModal();
+    } catch (err) {
+      status.textContent = 'Network request error.';
+    }
+  }
+
+  function closeProfileModal() {
+    document.getElementById('profile-modal').classList.add('hidden');
+  }
+
+  /* Student Dashboard Engine */
+  async function renderStudentDashboard() {
+    document.getElementById('student-view').classList.remove('hidden');
+    document.getElementById('video-content-pane').classList.remove('hidden');
+    document.getElementById('student-pending-alert').classList.add('hidden');
+    document.getElementById('student-no-courses').classList.add('hidden');
+    document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
+    const token = localStorage.getItem('jwt_token');
+
+    try {
+      const res = await fetch('/student/dashboard', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to load student curriculum.');
+
+      if (data.alert) {
+        document.getElementById('video-content-pane').classList.add('hidden');
+        document.getElementById('student-pending-alert').classList.remove('hidden');
+        return;
+      }
+
+      if (!data.courses || data.courses.length === 0) {
+        document.getElementById('video-content-pane').classList.add('hidden');
+        document.getElementById('student-no-courses').classList.remove('hidden');
+        return;
+      }
+
+      studentCourseOptions = data.courses;
+      const courseSelect = document.getElementById('student-course-select');
+      const selectedCourse = data.courses.find(
+        course => course.enrollment_id === activeEnrollmentId
+      ) || data.courses[0];
+      courseSelect.replaceChildren();
+      data.courses.forEach(course => {
+        const option = document.createElement('option');
+        option.value = course.enrollment_id;
+        option.textContent = course.course_title;
+        courseSelect.appendChild(option);
+      });
+      courseSelect.value = selectedCourse.enrollment_id;
+      document.getElementById('student-course-picker').classList.toggle(
+        'hidden',
+        data.courses.length < 2
+      );
+      courseSelect.onchange = () => {
+        const course = studentCourseOptions.find(
+          item => item.enrollment_id === courseSelect.value
+        );
+        if (course) renderStudentCourse(course);
+      };
+      renderStudentCourse(selectedCourse);
+    } catch (err) {
+      alert("Error loading student curriculum.");
+    }
+  }
+
+  function renderStudentCourse(activeCourse) {
+    activeEnrollmentId = activeCourse.enrollment_id;
+    activeStudentData = activeCourse;
+    document.getElementById('video-content-pane').classList.remove('hidden');
+    document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
+    document.getElementById('course-title-header').textContent = activeCourse.course_title;
+    document.getElementById('course-trainer-name').textContent =
+      `Trainer: ${activeCourse.trainer_name || 'Not assigned'}`;
+
+    const listContainer = document.getElementById('lessons-list');
+    listContainer.replaceChildren();
+    activeCourse.modules.forEach(mod => {
+      const item = document.createElement('div');
+      item.className = 'lesson-item' + (!mod.is_unlocked ? ' locked' : '');
+      item.dataset.moduleId = String(mod.module_id);
+
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.style.fontSize = '0.95rem';
+      title.textContent = `Lesson ${mod.order_index}: ${mod.title}`;
+      item.appendChild(title);
+
+      const statusRow = document.createElement('div');
+      statusRow.style.display = 'flex';
+      statusRow.style.justifyContent = 'space-between';
+      statusRow.style.alignItems = 'center';
+      statusRow.style.marginTop = '0.35rem';
+      const statusBadge = mod.assignment_status === 'approved'
+        ? createBadge('Passed', 'badge-success')
+        : mod.assignment_status === 'submitted'
+          ? createBadge('Submitted', 'badge-warning')
+          : mod.is_video_completed
+            ? createBadge('Video Done', 'badge-warning')
+            : createBadge('Not Started', 'badge-neutral');
+      const availability = document.createElement('small');
+      availability.style.color = mod.is_unlocked ? '#166534' : '#b45309';
+      availability.textContent = mod.is_unlocked ? 'Available' : 'Locked';
+      statusRow.append(statusBadge, availability);
+      item.appendChild(statusRow);
+
+      if (!mod.is_unlocked && mod.lock_reason) {
+        const lockReason = document.createElement('div');
+        lockReason.style.fontSize = '0.75rem';
+        lockReason.style.color = '#b45309';
+        lockReason.style.marginTop = '0.25rem';
+        lockReason.textContent = mod.lock_reason;
+        item.appendChild(lockReason);
+      }
+
+      if (mod.is_unlocked) {
+        item.addEventListener('click', () => selectLesson(mod.module_id));
+      }
+      listContainer.appendChild(item);
+    });
+
+    const firstUnlockedModule = activeCourse.modules.find(mod => mod.is_unlocked);
+    if (firstUnlockedModule) {
+      selectLesson(firstUnlockedModule.module_id);
+    } else {
+      document.getElementById('video-content-pane').classList.add('hidden');
+      document.getElementById('student-no-unlocked-lessons').classList.remove('hidden');
+    }
+  }
+
+  function selectLesson(moduleId) {
+    const mod = activeStudentData.modules.find(m => m.module_id === moduleId);
+    if (!mod || !mod.is_unlocked) return;
+    activeModuleId = moduleId;
+
+    document.querySelectorAll('.lesson-item').forEach(el => el.classList.remove('active'));
+    const currentTab = Array.from(document.querySelectorAll('.lesson-item')).find(
+      el => el.dataset.moduleId === String(moduleId)
+    );
+    if (currentTab) currentTab.classList.add('active');
+
+    document.getElementById('current-lesson-title').innerText = `Lesson ${mod.order_index}: ${mod.title}`;
+    renderLessonQuestions(mod.questions || []);
+    document.getElementById('lesson-assignment-card').classList.remove('hidden');
+    loadTaskReviewQr(mod);
+
+    const playerWrapper = document.getElementById('media-player-wrapper');
+    playerWrapper.replaceChildren();
+    const videoUrl = safeHttpUrl(mod.video_url);
+    const youtubeVideoId = getYouTubeVideoId(mod.video_url);
+    if (youtubeVideoId) {
+      const playerPlaceholder = document.createElement('div');
+      playerPlaceholder.id = 'yt-player';
+      playerWrapper.appendChild(playerPlaceholder);
+      const enrollmentId = activeEnrollmentId;
+      const completedModuleId = moduleId;
+      loadYouTubeApi().then(YT => {
+        if (activeModuleId !== completedModuleId || !document.getElementById('yt-player')) return;
+        new YT.Player('yt-player', {
+          videoId: youtubeVideoId,
+          playerVars: { origin: window.location.origin },
+          events: {
+            onStateChange: event => {
+              if (event.data === YT.PlayerState.ENDED) {
+                autoMarkVideoCompleted(enrollmentId, completedModuleId);
+              }
+            }
+          }
+        });
+      }).catch(err => {
+        console.error('YouTube player could not be initialized:', err);
+        if (activeModuleId !== completedModuleId) return;
+        const iframe = document.createElement('iframe');
+        iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(youtubeVideoId)}`;
+        iframe.allowFullscreen = true;
+        iframe.title = 'Lesson video';
+        playerWrapper.replaceChildren(iframe);
+      });
+    } else if (videoUrl) {
+      const video = document.createElement('video');
+      video.controls = true;
+      video.src = videoUrl.href;
+      video.addEventListener('ended', () => autoMarkVideoCompleted(activeEnrollmentId, moduleId));
+      playerWrapper.appendChild(video);
+    } else {
+      const message = document.createElement('p');
+      message.textContent = 'This lesson has an invalid video URL.';
+      playerWrapper.appendChild(message);
+    }
+
+    const videoBadge = document.getElementById('video-status-badge');
+    if (mod.is_video_completed) {
+      videoBadge.className = 'badge badge-success';
+      videoBadge.innerText = 'Status: Video Completed';
+    } else {
+      videoBadge.className = 'badge badge-neutral';
+      videoBadge.innerText = 'Status: Unwatched';
+    }
+
+    document.getElementById('assignment-prompt-text').innerText = mod.assignment_prompt || 'Complete the exercise provided in the assignment link below.';
+    const linkContainer = document.getElementById('assignment-link-container');
+    linkContainer.replaceChildren();
+    const assignmentUrl = mod.assignment_link && safeHttpUrl(mod.assignment_link);
+    if (assignmentUrl) {
+      const link = document.createElement('a');
+      link.href = assignmentUrl.href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'assignment-link-btn';
+      link.textContent = 'Open and complete your assigned project';
+      const linkEnrollmentId = activeEnrollmentId;
+      link.addEventListener('click', () => {
+        if (
+          activeEnrollmentId !== linkEnrollmentId
+          || activeModuleId !== mod.module_id
+          || mod.assignment_status === 'approved'
+          || mod.assignment_status === 'submitted'
+        ) return;
+        openedAssignmentLinks.add(`${activeEnrollmentId}:${mod.module_id}`);
+        const submitButton = document.getElementById('submit-assignment-btn');
+        const submissionInput = document.getElementById('assignment-submission-text');
+        const statusBadge = document.getElementById('assignment-status-text');
+        submitButton.disabled = false;
+        submissionInput.disabled = false;
+        statusBadge.className = 'badge badge-warning';
+        statusBadge.textContent = 'Status: Assignment link opened — ready to mark complete';
+      });
+      linkContainer.appendChild(link);
+    } else {
+      const message = document.createElement('p');
+      message.style.color = '#64748b';
+      message.style.fontStyle = 'italic';
+      message.textContent = mod.assignment_link
+        ? 'The assignment link is invalid.'
+        : 'No external link attached for this lesson.';
+      linkContainer.appendChild(message);
+    }
+
+    const assignBadge = document.getElementById('assignment-status-text');
+    const submitBtn = document.getElementById('submit-assignment-btn');
+    const submissionInput = document.getElementById('assignment-submission-text');
+    const feedbackText = document.getElementById('trainer-feedback-text');
+    const assignmentVerified = mod.assignment_completed === true;
+    const assignmentLinkOpened = openedAssignmentLinks.has(
+      `${activeEnrollmentId}:${mod.module_id}`
+    );
+    feedbackText.classList.toggle('hidden', !mod.trainer_feedback);
+    feedbackText.textContent = mod.trainer_feedback ? `Trainer feedback: ${mod.trainer_feedback}` : '';
+    submissionInput.value = mod.submission_notes || '';
+
+    if (mod.assignment_status === 'approved') {
+      assignBadge.className = 'badge badge-success';
+      assignBadge.innerText = 'Status: Approved by Trainer';
+      submitBtn.classList.add('hidden');
+      submitBtn.disabled = true;
+      submissionInput.disabled = true;
+    } else if (mod.assignment_status === 'submitted') {
+      assignBadge.className = 'badge badge-warning';
+      assignBadge.innerText = 'Status: Submitted (Awaiting Trainer Evaluation)';
+      submitBtn.classList.add('hidden');
+      submitBtn.disabled = true;
+      submissionInput.disabled = true;
+    } else {
+      assignBadge.className = `badge ${assignmentVerified ? 'badge-success' : assignmentLinkOpened ? 'badge-warning' : 'badge-neutral'}`;
+      assignBadge.innerText = assignmentVerified
+        ? (mod.assignment_status === 'rejected'
+          ? 'Status: Rejected — update your submission and resubmit'
+          : 'Status: Assignment completion verified')
+        : assignmentLinkOpened
+          ? 'Status: Assignment link opened — ready to submit'
+          : 'Status: Ready to submit for trainer review';
+      submitBtn.classList.remove('hidden');
+      submitBtn.disabled = !mod.is_video_completed;
+      submissionInput.disabled = !mod.is_video_completed;
+    }
+  }
+
+  function renderLessonQuestions(questions) {
+    const container = document.getElementById('lesson-questions-list');
+    container.replaceChildren();
+    if (questions.length === 0) {
+      const emptyState = document.createElement('p');
+      emptyState.textContent = 'No questions yet. Be the first to ask about this lesson.';
+      container.appendChild(emptyState);
+      return;
+    }
+
+    questions.forEach(question => {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.style.marginBottom = '0.75rem';
+
+      const author = document.createElement('strong');
+      author.textContent = question.student_name;
+      card.appendChild(author);
+
+      const questionText = document.createElement('p');
+      questionText.textContent = question.question;
+      card.appendChild(questionText);
+
+      if (question.trainer_reply) {
+        const reply = document.createElement('p');
+        reply.style.borderLeft = '3px solid var(--primary)';
+        reply.style.paddingLeft = '0.75rem';
+        const replyAuthor = document.createElement('strong');
+        replyAuthor.textContent = 'Trainer reply: ';
+        reply.append(replyAuthor, document.createTextNode(question.trainer_reply));
+        card.appendChild(reply);
+      } else {
+        const waiting = document.createElement('small');
+        waiting.style.color = '#64748b';
+        waiting.textContent = 'Waiting for the trainer to reply.';
+        card.appendChild(waiting);
+      }
+
+      container.appendChild(card);
+    });
+  }
+
+  function switchLessonCommunityTab(tab) {
+    const isAnnouncements = tab === 'announcements';
+    const qaTab = document.getElementById('lesson-qa-tab');
+    const announcementsTab = document.getElementById('lesson-announcements-tab');
+    const qaPanel = document.getElementById('lesson-qa-panel');
+    const announcementsPanel = document.getElementById('lesson-announcements-panel');
+
+    qaTab.classList.toggle('active', !isAnnouncements);
+    qaTab.setAttribute('aria-selected', String(!isAnnouncements));
+    qaTab.tabIndex = isAnnouncements ? -1 : 0;
+    qaPanel.classList.toggle('hidden', isAnnouncements);
+    qaPanel.hidden = isAnnouncements;
+
+    announcementsTab.classList.toggle('active', isAnnouncements);
+    announcementsTab.setAttribute('aria-selected', String(isAnnouncements));
+    announcementsTab.tabIndex = isAnnouncements ? 0 : -1;
+    announcementsPanel.classList.toggle('hidden', !isAnnouncements);
+    announcementsPanel.hidden = !isAnnouncements;
+  }
+
+  async function loadTaskReviewQr(module) {
+    const requestEnrollmentId = activeEnrollmentId;
+    const requestModuleId = module.module_id;
+    const container = document.getElementById('task-review-qr');
+    container.replaceChildren();
+    container.classList.remove('hidden');
+
+    const heading = document.createElement('h4');
+    heading.textContent = 'Task reflection and review';
+    container.appendChild(heading);
+    if (!module.review_available) {
+      const notice = document.createElement('p');
+      notice.textContent = 'After your trainer approves your assignment, a QR code for the reflection form will appear here.';
+      container.appendChild(notice);
+      return;
+    }
+
+    const loading = document.createElement('p');
+    loading.textContent = 'Loading your task reflection QR code…';
+    container.appendChild(loading);
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(requestEnrollmentId)}/modules/${encodeURIComponent(requestModuleId)}/review-qr`,
+        {
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load the task reflection QR code.');
+      if (
+        activeEnrollmentId !== requestEnrollmentId
+        || activeModuleId !== requestModuleId
+      ) return;
+
+      container.replaceChildren();
+      const title = document.createElement('h4');
+      title.textContent = 'Task reflection and review';
+      container.appendChild(title);
+      const instructions = document.createElement('p');
+      instructions.textContent = 'Scan this QR code to answer the task reflection questions and generate your review.';
+      container.appendChild(instructions);
+      const image = document.createElement('img');
+      image.src = `data:image/png;base64,${data.qr_code}`;
+      image.alt = 'QR code for the task reflection form';
+      image.width = 220;
+      image.height = 220;
+      container.appendChild(image);
+
+      const openLink = document.createElement('a');
+      openLink.href = data.review_url;
+      openLink.textContent = 'Open the reflection form on this device';
+      openLink.target = '_blank';
+      openLink.rel = 'noopener noreferrer';
+      container.appendChild(openLink);
+    } catch (error) {
+      if (
+        activeEnrollmentId !== requestEnrollmentId
+        || activeModuleId !== requestModuleId
+      ) return;
+      container.replaceChildren(heading);
+      const message = document.createElement('p');
+      message.textContent = error.message || 'Could not load the task reflection QR code.';
+      container.appendChild(message);
+    }
+  }
+
+  async function refreshStudentLesson() {
+    if (!activeEnrollmentId || !activeModuleId || studentLessonRefreshInProgress) return;
+    studentLessonRefreshInProgress = true;
+    const token = localStorage.getItem('jwt_token');
+    try {
+      const response = await fetch('/student/dashboard', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not refresh assignment status.');
+      const course = data.courses.find(item => item.enrollment_id === activeEnrollmentId);
+      if (!course) throw new Error('Course enrollment was not found.');
+      const previousModule = activeStudentData
+        && activeStudentData.modules.find(item => item.module_id === activeModuleId);
+      const updatedModule = course.modules.find(item => item.module_id === activeModuleId);
+      activeStudentData = course;
+      if (!updatedModule) throw new Error('Lesson was not found in the course.');
+      if (previousModule?.assignment_status !== updatedModule.assignment_status) {
+        selectLesson(activeModuleId);
+      } else if (previousModule?.review_available !== updatedModule.review_available) {
+        loadTaskReviewQr(updatedModule);
+      }
+    } catch (err) {
+      console.error('Could not refresh the active lesson:', err);
+    } finally {
+      studentLessonRefreshInProgress = false;
+    }
+  }
+
+  window.addEventListener('focus', refreshStudentLesson);
+  window.setInterval(() => {
+    const studentView = document.getElementById('student-view');
+    if (
+      !document.hidden
+      && studentView
+      && !studentView.classList.contains('hidden')
+    ) {
+      refreshStudentLesson();
+    }
+  }, 15000);
+
+  async function submitLessonQuestion() {
+    if (!activeEnrollmentId || !activeModuleId) return;
+    const input = document.getElementById('lesson-question-input');
+    const submitButton = document.getElementById('lesson-question-submit');
+    const question = input.value.trim();
+    if (!question) {
+      input.setCustomValidity('Enter a question before posting.');
+      input.reportValidity();
+      input.setCustomValidity('');
+      return;
+    }
+
+    submitButton.disabled = true;
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(activeEnrollmentId)}/modules/${encodeURIComponent(activeModuleId)}/questions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ question }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not post your question.');
+      input.value = '';
+      await refreshStudentLesson();
+    } catch (error) {
+      alert(error.message || 'Could not post your question.');
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
+  async function autoMarkVideoCompleted(enrollmentId, moduleId) {
+    if (!enrollmentId || !moduleId) return;
+    const token = localStorage.getItem('jwt_token');
+
+    try {
+      const res = await fetch(`/student/complete-video/${encodeURIComponent(enrollmentId)}/${encodeURIComponent(moduleId)}`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('The server rejected video completion.');
+      if (activeEnrollmentId === enrollmentId && activeModuleId === moduleId) {
+        renderStudentDashboard();
+      }
+    } catch (err) {
+      console.error("Auto video completion failed:", err);
+    }
+  }
+
+  async function submitAssignment() {
+    if (!activeEnrollmentId || !activeModuleId) return;
+    const token = localStorage.getItem('jwt_token');
+    const submissionInput = document.getElementById('assignment-submission-text');
+    const submissionText = submissionInput.value.trim();
+    if (!submissionText) {
+      alert('Please enter a description or link to your completed work.');
+      submissionInput.focus();
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('enrollment_id', activeEnrollmentId);
+    formData.append('module_id', activeModuleId);
+    formData.append('submission_text', submissionText);
+
+    try {
+      const res = await fetch('/student/submit-assignment', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map(issue => typeof issue === 'string' ? issue : issue.msg || JSON.stringify(issue)).join('\n')
+          : typeof data.detail === 'string'
+            ? data.detail
+            : JSON.stringify(data.detail);
+        alert(detail || "Submission failed");
+        return;
+      }
+      alert("Assignment successfully submitted for review!");
+      renderStudentDashboard();
+    } catch (err) {
+      alert("Error submitting assignment.");
+    }
+  }
+
+  /* Admin Dashboard Render */
+  async function renderAdminDashboard() {
+    document.getElementById('admin-view').classList.remove('hidden');
+    const token = localStorage.getItem('jwt_token');
+
+    const res = await fetch('/admin/dashboard', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const metrics = await res.json();
+    if (!res.ok) throw new Error(metrics.detail || 'Failed to load admin dashboard.');
+
+    const metricsContainer = document.getElementById('admin-metrics');
+    metricsContainer.replaceChildren();
+    [
+      ['Trainers', metrics.total_trainers, '#eff6ff'],
+      ['Students', metrics.total_students, '#eff6ff'],
+      ['Pending Clearance', metrics.pending_student_access_approvals, '#fef3c7']
+    ].forEach(([label, count, background]) => {
+      const metric = document.createElement('div');
+      metric.style.background = background;
+      metric.style.padding = '1rem';
+      metric.style.borderRadius = '6px';
+      metric.style.flex = '1';
+      metric.append(document.createTextNode(`${label}: `));
+      const value = document.createElement('strong');
+      value.textContent = count;
+      metric.appendChild(value);
+      metricsContainer.appendChild(metric);
+    });
+
+    const pendingRes = await fetch('/admin/pending-access-list', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const pending = await pendingRes.json();
+    if (!pendingRes.ok) throw new Error(pending.detail || 'Failed to load pending approvals.');
+
+    if (pending.length === 0) {
+      const container = document.getElementById('admin-pending-table-container');
+      container.replaceChildren();
+      const message = document.createElement('p');
+      message.textContent = 'No pending approvals.';
+      container.appendChild(message);
+    } else {
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.marginTop = '1rem';
+      const head = table.createTHead().insertRow();
+      ['Name', 'Email', 'Phone', 'Action'].forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        head.appendChild(th);
+      });
+      const body = table.createTBody();
+      pending.forEach(student => {
+        const row = body.insertRow();
+        [student.name, student.email, student.phone_number].forEach(value => {
+          row.insertCell().textContent = value == null ? '' : String(value);
+        });
+        const actionCell = row.insertCell();
+        const button = document.createElement('button');
+        button.textContent = 'Grant Access';
+        button.addEventListener('click', () => grantAccess(student.id));
+        actionCell.appendChild(button);
+      });
+
+      const container = document.getElementById('admin-pending-table-container');
+      container.replaceChildren(table);
+    }
+
+      await renderAdminStudentList(token);
+      await renderAdminDeletionRequests(token);
+  }
+
+  async function renderAdminStudentList(token) {
+      const container = document.getElementById('admin-student-list');
+      const response = await fetch('/admin/students', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to load student progress.');
+      renderStudentTable(container, data.students || [], false);
+  }
+
+  function renderStudentTable(container, students, canRequestDeletion, deletionStates = new Map()) {
+      container.replaceChildren();
+      if (!students.length) {
+        const message = document.createElement('p');
+        message.textContent = 'No students to display.';
+        container.appendChild(message);
+        return;
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'student-table-wrap';
+      const table = document.createElement('table');
+      table.className = 'student-table';
+      const header = table.createTHead().insertRow();
+      ['Student name', 'Email ID', 'Phone Number', 'Course title', 'Joining date', 'Progress', 'Delete'].forEach(label => {
+        const cell = document.createElement('th');
+        cell.scope = 'col';
+        cell.textContent = label;
+        header.appendChild(cell);
+      });
+
+      const body = table.createTBody();
+      students.forEach(student => {
+        const row = body.insertRow();
+        [
+          student.student_name,
+          student.student_email,
+          student.phone_number || 'Not provided',
+          student.course_title,
+          student.enrolled_at ? new Date(student.enrolled_at).toLocaleDateString() : '—',
+        ].forEach(value => {
+          row.insertCell().textContent = value == null ? '' : String(value);
+        });
+
+        const progressCell = row.insertCell();
+        const progress = document.createElement('div');
+        progress.className = 'student-progress';
+        progress.setAttribute('role', 'progressbar');
+        progress.setAttribute('aria-valuemin', '0');
+        progress.setAttribute('aria-valuemax', '12');
+        progress.setAttribute('aria-valuenow', String(Math.min(student.completed_slots || 0, 12)));
+        progress.setAttribute(
+          'aria-label',
+          `${student.student_name}: ${student.completed_slots || 0} of ${student.total_slots || 0} lessons complete`
+        );
+        for (let index = 0; index < 12; index += 1) {
+          const segment = document.createElement('span');
+          const module = (student.modules || [])[index];
+          if (module && module.is_video_completed && module.assignment_completed) {
+            segment.classList.add('complete');
+          }
+          segment.classList.add('student-progress-segment');
+          segment.setAttribute('aria-hidden', 'true');
+          progress.appendChild(segment);
+        }
+        progressCell.appendChild(progress);
+
+        const actionCell = row.insertCell();
+        const state = deletionStates.get(student.student_id);
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'student-delete-btn';
+        deleteButton.textContent = '🗑';
+        deleteButton.setAttribute('aria-label', `Request deletion of ${student.student_name}`);
+        deleteButton.title = state === 'pending'
+          ? 'Waiting for admin approval'
+          : state === 'approved'
+            ? 'Delete student (admin approved)'
+            : canRequestDeletion
+              ? 'Request student deletion'
+              : 'Only the student’s trainer can request deletion';
+        deleteButton.disabled = !canRequestDeletion || state === 'pending';
+        actionCell.appendChild(deleteButton);
+
+        if (canRequestDeletion && student.student_id && state !== 'pending') {
+          deleteButton.addEventListener('click', () => {
+            if (state === 'approved') {
+              deleteApprovedStudent(student.student_id);
+            } else {
+              showStudentDeletionForm(
+                body,
+                row,
+                student,
+                deleteButton,
+              );
+            }
+          });
+        }
+      });
+      wrapper.appendChild(table);
+      container.appendChild(wrapper);
+  }
+
+  function showStudentDeletionForm(body, studentRow, student, deleteButton) {
+      const nextRow = studentRow.nextElementSibling;
+      if (nextRow && nextRow.dataset.deletionForm === 'true') return;
+      const formRow = body.insertRow(studentRow.sectionRowIndex + 1);
+      formRow.dataset.deletionForm = 'true';
+      const formCell = formRow.insertCell();
+      formCell.colSpan = 7;
+      formCell.className = 'student-delete-form-cell';
+      const label = document.createElement('label');
+      label.textContent = `Why should ${student.student_name} be deleted? This reason will be sent to an administrator.`;
+      const reason = document.createElement('textarea');
+      reason.className = 'student-delete-reason';
+      reason.maxLength = 2000;
+      reason.required = true;
+      reason.setAttribute('aria-label', `Deletion reason for ${student.student_name}`);
+      label.appendChild(reason);
+      const requestButton = document.createElement('button');
+      requestButton.type = 'button';
+      requestButton.textContent = 'Send request to admin';
+      requestButton.addEventListener('click', () => requestStudentDeletion(
+        student.student_id,
+        reason.value,
+        requestButton
+      ));
+      const cancelButton = document.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.textContent = 'Cancel';
+      cancelButton.style.marginLeft = '0.5rem';
+      cancelButton.addEventListener('click', () => {
+        formRow.remove();
+        deleteButton.focus();
+      });
+      formCell.append(label, requestButton, cancelButton);
+      reason.focus();
+  }
+
+  async function renderAdminDeletionRequests(token) {
+    const container = document.getElementById('admin-pending-deletions');
+    const response = await fetch('/admin/pending-deletion-list', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const requests = await response.json();
+    if (!response.ok) throw new Error(requests.detail || 'Failed to load trainer deletion requests.');
+
+    container.replaceChildren();
+    if (!requests.length) {
+      const message = document.createElement('p');
+      message.textContent = 'No pending deletion requests.';
+      container.appendChild(message);
+      return;
+    }
+
+    requests.forEach(request => {
+      const card = document.createElement('article');
+      card.className = 'assignment-card';
+      const details = document.createElement('p');
+      details.textContent = `${request.trainer_name} (${request.trainer_email}) requests removal of ${request.student_name} (${request.student_email}).`;
+      card.appendChild(details);
+      const reason = document.createElement('p');
+      reason.textContent = `Reason: ${request.reason}`;
+      card.appendChild(reason);
+      if (request.created_at) {
+        const date = document.createElement('small');
+        date.textContent = `Requested: ${new Date(request.created_at).toLocaleString()}`;
+        card.appendChild(date);
+      }
+
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '0.5rem';
+      const approve = document.createElement('button');
+      approve.type = 'button';
+      approve.textContent = 'Grant trainer deletion access';
+      approve.addEventListener('click', () => processDeletionRequest(request.request_id, true));
+      const reject = document.createElement('button');
+      reject.type = 'button';
+      reject.textContent = 'Reject request';
+      reject.addEventListener('click', () => processDeletionRequest(request.request_id, false));
+      actions.append(approve, reject);
+      card.appendChild(actions);
+      container.appendChild(card);
+    });
+  }
+
+  async function createTrainerAccount() {
+    const result = document.getElementById('admin-trainer-result');
+    const submitButton = document.getElementById('admin-create-trainer-btn');
+    result.textContent = '';
+    submitButton.disabled = true;
+    const payload = {
+      name: document.getElementById('admin-trainer-name').value.trim(),
+      email: document.getElementById('admin-trainer-email').value.trim(),
+      phone_number: document.getElementById('admin-trainer-phone').value.trim(),
+      specialization: document.getElementById('admin-trainer-specialization').value.trim(),
+      password: document.getElementById('admin-trainer-password').value,
+    };
+
+    try {
+      const response = await fetch('/admin/trainers', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        result.textContent = data.detail || 'Could not create trainer account.';
+        return;
+      }
+      document.getElementById('admin-trainer-form').reset();
+      result.textContent = `${data.name} (${data.email}) can now sign in. Share the initial password with them securely.`;
+      await renderAdminDashboard();
+    } catch (err) {
+      result.textContent = 'Network error while creating trainer account.';
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
+  function openCreateTrainerModal() {
+    document.getElementById('admin-trainer-form').reset();
+    document.getElementById('admin-trainer-result').textContent = '';
+    document.getElementById('admin-trainer-modal').classList.remove('hidden');
+    document.getElementById('admin-trainer-name').focus();
+  }
+
+  async function processDeletionRequest(requestId, approved) {
+    if (approved && !confirm('Approve this request and let the trainer delete the student from their dashboard?')) {
+      return;
+    }
+    const response = await fetch('/admin/process-deletion', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ request_id: requestId, approved }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || 'Could not process deletion request.');
+      return;
+    }
+    await renderAdminDashboard();
+  }
+
+  async function grantAccess(id) {
+    const token = localStorage.getItem('jwt_token');
+    const res = await fetch('/admin/grant-access/' + encodeURIComponent(id), {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed to grant student access.');
+    renderAdminDashboard();
+  }
+
+  async function renderTrainerDashboard() {
+    const token = localStorage.getItem('jwt_token');
+    const headers = { 'Authorization': 'Bearer ' + token };
+    const courseContainer = document.getElementById('trainer-courses');
+    const dashboardResponse = await fetch('/trainer/dashboard', { headers });
+    const dashboard = await dashboardResponse.json();
+    if (!dashboardResponse.ok) {
+      throw new Error(dashboard.detail || 'Failed to load trainer courses.');
+    }
+    trainerDashboardData = dashboard;
+    const deletionRequestsResponse = await fetch('/trainer/deletion-requests', { headers });
+    const deletionRequests = await deletionRequestsResponse.json();
+    if (!deletionRequestsResponse.ok) {
+      throw new Error(deletionRequests.detail || 'Failed to load deletion request statuses.');
+    }
+    const pendingDeletionStudentIds = new Set(
+      deletionRequests
+        .filter(request => request.status === 'pending')
+        .map(request => request.student_id)
+    );
+    const approvedDeletionStudentIds = new Set(
+      deletionRequests
+        .filter(request => request.status === 'approved')
+        .map(request => request.student_id)
+    );
+
+    courseContainer.replaceChildren();
+    const studentSection = document.createElement('section');
+    const studentsHeading = document.createElement('h4');
+    studentsHeading.textContent = 'Students and progress';
+    studentSection.appendChild(studentsHeading);
+    const studentsTable = document.createElement('div');
+    const students = (dashboard.courses || []).flatMap(course =>
+      (course.students || []).map(student => ({
+        ...student,
+        course_title: course.title,
+      }))
+    );
+    const deletionStates = new Map();
+    pendingDeletionStudentIds.forEach(studentId => deletionStates.set(studentId, 'pending'));
+    approvedDeletionStudentIds.forEach(studentId => deletionStates.set(studentId, 'approved'));
+    renderStudentTable(studentsTable, students, true, deletionStates);
+    studentSection.appendChild(studentsTable);
+    courseContainer.appendChild(studentSection);
+
+    if (!dashboard.courses || dashboard.courses.length === 0) {
+      const message = document.createElement('p');
+      message.textContent = 'You have not created any courses yet. Use “Add new course” to get started.';
+      courseContainer.appendChild(message);
+    } else {
+      dashboard.courses.forEach(course => {
+        const section = document.createElement('section');
+        section.className = 'trainer-course-card';
+        const title = document.createElement('h4');
+        title.textContent = course.title;
+        section.appendChild(title);
+        if (course.description) {
+          const description = document.createElement('p');
+          description.textContent = course.description;
+          section.appendChild(description);
+        }
+
+        const summary = document.createElement('p');
+        summary.className = 'trainer-course-summary';
+        summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} lesson(s)`;
+        section.appendChild(summary);
+        const lessons = document.createElement('div');
+        lessons.className = 'trainer-lessons';
+        (course.modules || []).forEach((module, index) => {
+          const lessonCard = document.createElement('article');
+          lessonCard.className = 'trainer-lesson-card';
+
+          const lessonHeading = document.createElement('div');
+          lessonHeading.className = 'trainer-lesson-heading';
+          const lessonTitle = document.createElement('h5');
+          lessonTitle.textContent = `Lesson ${module.order_index || index + 1}: ${module.title}`;
+          lessonHeading.appendChild(lessonTitle);
+          lessonCard.appendChild(lessonHeading);
+
+          if (module.assignment_prompt) {
+            const assignmentPrompt = document.createElement('p');
+            assignmentPrompt.className = 'trainer-lesson-prompt';
+            assignmentPrompt.textContent = module.assignment_prompt;
+            lessonCard.appendChild(assignmentPrompt);
+          }
+          const assignmentLinks = new Map();
+          (course.students || []).forEach(student => {
+            const studentModule = (student.modules || []).find(
+              progress => progress.module_id === module.module_id
+            );
+            const studentAssignmentUrl = studentModule && studentModule.assignment_link
+              ? safeHttpUrl(studentModule.assignment_link)
+              : null;
+            if (!studentAssignmentUrl) return;
+
+            const existingLink = assignmentLinks.get(studentAssignmentUrl.href);
+            if (existingLink) {
+              existingLink.studentNames.push(student.student_name);
+              return;
+            }
+            assignmentLinks.set(studentAssignmentUrl.href, {
+              label: 'Open assignment',
+              studentNames: [student.student_name],
+            });
+          });
+          if (assignmentLinks.size === 0) {
+            const assignmentUrl = module.assignment_link && safeHttpUrl(module.assignment_link);
+            if (assignmentUrl) {
+              assignmentLinks.set(assignmentUrl.href, {
+                label: 'Open assignment',
+                studentNames: [],
+              });
+            }
+          }
+          if (assignmentLinks.size === 0) {
+            const noAssignmentLink = document.createElement('p');
+            noAssignmentLink.className = 'trainer-course-summary';
+            noAssignmentLink.textContent = 'No assignment link is set for this lesson.';
+            lessonCard.appendChild(noAssignmentLink);
+          } else {
+            assignmentLinks.forEach((linkDetails, href) => {
+              const assignmentLink = document.createElement('a');
+              assignmentLink.className = 'trainer-resource-link';
+              assignmentLink.href = href;
+              assignmentLink.target = '_blank';
+              assignmentLink.rel = 'noopener noreferrer';
+              assignmentLink.textContent = linkDetails.studentNames.length > 1
+                ? `${linkDetails.label} for ${linkDetails.studentNames.join(', ')}`
+                : linkDetails.label;
+              lessonCard.appendChild(assignmentLink);
+            });
+          }
+
+          const questions = module.questions || [];
+          const questionsSection = document.createElement('section');
+          questionsSection.className = 'trainer-lesson-questions';
+          const questionsHeading = document.createElement('h6');
+          questionsHeading.textContent = `Student questions (${questions.length})`;
+          questionsSection.appendChild(questionsHeading);
+          if (questions.length === 0) {
+            const noQuestions = document.createElement('p');
+            noQuestions.className = 'trainer-course-summary';
+            noQuestions.textContent = 'No questions for this lesson yet.';
+            questionsSection.appendChild(noQuestions);
+          } else {
+            questions.forEach(question => {
+              const questionCard = document.createElement('article');
+              questionCard.className = 'trainer-question-card';
+
+              const questionHeading = document.createElement('div');
+              questionHeading.className = 'trainer-question-heading';
+              const studentName = document.createElement('strong');
+              studentName.textContent = question.student_name;
+              questionHeading.appendChild(studentName);
+              questionCard.appendChild(questionHeading);
+
+              const questionText = document.createElement('p');
+              questionText.textContent = question.question;
+              questionCard.appendChild(questionText);
+
+              const replyInput = document.createElement('textarea');
+              replyInput.maxLength = 2000;
+              replyInput.required = true;
+              replyInput.value = question.trainer_reply || '';
+              replyInput.placeholder = 'Write a reply visible to students in this course';
+              replyInput.setAttribute('aria-label', `Reply to ${question.student_name}'s question`);
+              questionCard.appendChild(replyInput);
+
+              const replyButton = document.createElement('button');
+              replyButton.type = 'button';
+              replyButton.className = 'profile-link-btn';
+              replyButton.textContent = question.trainer_reply ? 'Update reply' : 'Post reply';
+              replyButton.addEventListener('click', () => replyToLessonQuestion(
+                question.id,
+                replyInput,
+                replyButton
+              ));
+              questionCard.appendChild(replyButton);
+              questionsSection.appendChild(questionCard);
+            });
+          }
+          lessonCard.appendChild(questionsSection);
+          lessons.appendChild(lessonCard);
+        });
+        section.appendChild(lessons);
+        courseContainer.appendChild(section);
+      });
+    }
+
+    const pendingResponse = await fetch('/trainer/pending-assignments', { headers });
+    const pending = await pendingResponse.json();
+    if (!pendingResponse.ok) {
+      throw new Error(pending.detail || 'Failed to load pending assignments.');
+    }
+    renderTrainerPendingAssignments(pending);
+  }
+
+  function renderTrainerPendingAssignments(assignments) {
+    const status = document.getElementById('trainer-pending-status');
+    const container = document.getElementById('trainer-pending-table-container');
+    container.replaceChildren();
+    status.textContent = assignments.length
+      ? `${assignments.length} assignment(s) waiting for evaluation.`
+      : 'No pending assignments.';
+    if (assignments.length === 0) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'trainer-pending-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'trainer-pending-table';
+    const header = table.createTHead().insertRow();
+    ['Student', 'Assignment', 'Student work', 'Decision'].forEach(text => {
+      const cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = text;
+      header.appendChild(cell);
+    });
+
+    const body = table.createTBody();
+    assignments.forEach(assignment => {
+      const row = body.insertRow();
+
+      const studentCell = row.insertCell();
+      const studentName = document.createElement('strong');
+      studentName.textContent = assignment.student_name;
+      studentCell.appendChild(studentName);
+      const studentEmail = document.createElement('p');
+      studentEmail.textContent = assignment.student_email;
+      studentCell.appendChild(studentEmail);
+      const courseAndLesson = document.createElement('p');
+      courseAndLesson.textContent = `${assignment.course_title} · ${assignment.module_title}`;
+      studentCell.appendChild(courseAndLesson);
+      if (assignment.submitted_at) {
+        const submittedAt = document.createElement('small');
+        submittedAt.textContent = `Submitted ${new Date(assignment.submitted_at).toLocaleString()}`;
+        studentCell.appendChild(submittedAt);
+      }
+
+      const assignmentCell = row.insertCell();
+      if (assignment.assignment_prompt) {
+        const prompt = document.createElement('p');
+        prompt.textContent = assignment.assignment_prompt;
+        assignmentCell.appendChild(prompt);
+      }
+      const assignmentUrl = assignment.assignment_link && safeHttpUrl(assignment.assignment_link);
+      if (assignmentUrl) {
+        const assignmentLink = document.createElement('a');
+        assignmentLink.className = 'trainer-resource-link';
+        assignmentLink.href = assignmentUrl.href;
+        assignmentLink.target = '_blank';
+        assignmentLink.rel = 'noopener noreferrer';
+        assignmentLink.textContent = 'Open student assignment';
+        assignmentCell.appendChild(assignmentLink);
+      } else {
+        const missingLink = document.createElement('p');
+        missingLink.textContent = 'No assignment link available.';
+        assignmentCell.appendChild(missingLink);
+      }
+
+      const submissionCell = row.insertCell();
+      const submissionNotes = assignment.submission_notes || '';
+      const submittedUrlMatch = submissionNotes.match(/https?:\/\/[^\s<>"']+/i);
+      const submittedUrl = submittedUrlMatch
+        && safeHttpUrl(submittedUrlMatch[0].replace(/[.,;:!?)]+$/, ''));
+      if (submittedUrl) {
+        const submissionLink = document.createElement('a');
+        submissionLink.className = 'trainer-resource-link';
+        submissionLink.href = submittedUrl.href;
+        submissionLink.target = '_blank';
+        submissionLink.rel = 'noopener noreferrer';
+        submissionLink.textContent = submissionNotes;
+        submissionLink.addEventListener('click', event => {
+          event.preventDefault();
+          openStudentSubmission(assignment.progress_id, submittedUrl.href);
+        });
+        submissionCell.appendChild(submissionLink);
+      } else {
+        submissionCell.textContent = submissionNotes || '(No submission details)';
+      }
+
+      const decisionCell = row.insertCell();
+      const feedback = document.createElement('textarea');
+      feedback.maxLength = 4000;
+      feedback.placeholder = 'Optional feedback for the student';
+      feedback.setAttribute('aria-label', `Feedback for ${assignment.student_name}`);
+      decisionCell.appendChild(feedback);
+      const actions = document.createElement('div');
+      actions.className = 'trainer-assignment-actions';
+
+      const approveButton = document.createElement('button');
+      approveButton.type = 'button';
+      approveButton.className = 'submit-btn';
+      approveButton.textContent = "Approve student's work";
+      approveButton.disabled = !assignmentUrl;
+      approveButton.addEventListener('click', () => evaluateAssignment(
+        assignment.progress_id,
+        true,
+        feedback.value
+      ));
+      actions.appendChild(approveButton);
+
+      const requestChangesButton = document.createElement('button');
+      requestChangesButton.type = 'button';
+      requestChangesButton.className = 'profile-link-btn';
+      requestChangesButton.textContent = 'Request changes';
+      requestChangesButton.addEventListener('click', () => evaluateAssignment(
+        assignment.progress_id,
+        false,
+        feedback.value
+      ));
+      actions.appendChild(requestChangesButton);
+      decisionCell.appendChild(actions);
+
+    });
+
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
+  }
+
+  async function openStudentSubmission(progressId, submissionUrl) {
+    const openedWindow = window.open('about:blank', '_blank');
+    if (openedWindow) openedWindow.opener = null;
+    try {
+      const response = await fetch(
+        `/trainer/assignments/${encodeURIComponent(progressId)}/open-submission`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not open the student submission.');
+      if (openedWindow) {
+        openedWindow.location.href = submissionUrl;
+      } else {
+        window.location.href = submissionUrl;
+      }
+    } catch (error) {
+      if (openedWindow) openedWindow.close();
+      alert(error.message || 'Could not open the student submission.');
+    }
+  }
+
+  async function replyToLessonQuestion(questionId, replyInput, replyButton) {
+    const reply = replyInput.value.trim();
+    if (!reply) {
+      replyInput.setCustomValidity('Enter a reply before posting.');
+      replyInput.reportValidity();
+      replyInput.setCustomValidity('');
+      return;
+    }
+
+    replyButton.disabled = true;
+    try {
+      const response = await fetch(
+        `/trainer/lesson-questions/${encodeURIComponent(questionId)}/reply`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reply }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not post the trainer reply.');
+      await renderTrainerDashboard();
+    } catch (error) {
+      alert(error.message || 'Could not post the trainer reply.');
+    } finally {
+      replyButton.disabled = false;
+    }
+  }
+
+  async function requestStudentDeletion(studentId, reason, button) {
+    const cleanReason = reason.trim();
+    if (!cleanReason) {
+      alert('Enter a reason before requesting student deletion.');
+      return;
+    }
+
+    async function deleteApprovedStudent(studentId) {
+      if (!confirm('Admin approved this request. Permanently delete this student and their course progress?')) {
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          alert(data.detail || 'Could not delete the approved student.');
+          return;
+        }
+        await renderTrainerDashboard();
+      } catch (error) {
+        alert('Network error while deleting the approved student.');
+      }
+    }
+    button.disabled = true;
+    try {
+      const response = await fetch('/trainer/request-student-deletion', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ student_id: studentId, reason: cleanReason }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Could not submit deletion request.');
+        return;
+      }
+      await renderTrainerDashboard();
+    } catch (err) {
+      alert('Network error while submitting deletion request.');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function evaluateAssignment(progressId, isApproved, feedback) {
+    const token = localStorage.getItem('jwt_token');
+    const response = await fetch('/trainer/evaluate-assignment', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        progress_id: progressId,
+        is_approved: isApproved,
+        feedback
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || 'Could not evaluate this assignment.');
+      return;
+    }
+    await renderTrainerDashboard();
+  }
+
+  function addTrainerLesson(containerId) {
+    const container = document.getElementById(containerId);
+    const lessonNumber = container.querySelectorAll('.trainer-lesson').length + 1;
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'trainer-lesson assignment-card';
+
+    const legend = document.createElement('legend');
+    legend.textContent = `Lesson ${lessonNumber}`;
+    fieldset.appendChild(legend);
+
+    const fields = [
+      ['Lesson title', 'lesson-title', 'text', true],
+      ['Video URL', 'lesson-video-url', 'url', true],
+      ['Assignment prompt', 'lesson-assignment-prompt', 'textarea', true],
+      ['Assignment link', 'lesson-assignment-link', 'url', false],
+    ];
+    fields.forEach(([labelText, className, type, required]) => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      const input = type === 'textarea'
+        ? document.createElement('textarea')
+        : document.createElement('input');
+      if (type !== 'textarea') input.type = type;
+      input.className = className;
+      input.required = required;
+      if (type === 'textarea') {
+        input.style.width = '100%';
+        input.style.minHeight = '4rem';
+        input.style.boxSizing = 'border-box';
+      }
+      label.appendChild(input);
+      group.appendChild(label);
+      fieldset.appendChild(group);
+    });
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'profile-link-btn';
+    removeButton.textContent = 'Remove lesson';
+    removeButton.addEventListener('click', () => {
+      fieldset.remove();
+      container.querySelectorAll('.trainer-lesson legend')
+        .forEach((item, index) => { item.textContent = `Lesson ${index + 1}`; });
+    });
+    fieldset.appendChild(removeButton);
+    container.appendChild(fieldset);
+  }
+
+  function openNewCourseModal() {
+    const lessons = document.getElementById('trainer-course-lessons');
+    document.getElementById('trainer-course-form').reset();
+    lessons.replaceChildren();
+    addTrainerLesson('trainer-course-lessons');
+    document.getElementById('trainer-course-modal').classList.remove('hidden');
+  }
+
+  function openAddLessonModal() {
+    if (!trainerDashboardData.courses || trainerDashboardData.courses.length === 0) {
+      alert('You have no courses yet. Create a course before adding lessons.');
+      return;
+    }
+    const select = document.getElementById('trainer-existing-course');
+    select.replaceChildren();
+    trainerDashboardData.courses.forEach(course => {
+      const option = document.createElement('option');
+      option.value = course.id;
+      option.textContent = course.title;
+      select.appendChild(option);
+    });
+    const fields = document.getElementById('trainer-existing-lesson-fields');
+    fields.replaceChildren();
+    addTrainerLesson('trainer-existing-lesson-fields');
+    document.getElementById('trainer-existing-lesson-form').reset();
+    document.getElementById('trainer-lesson-modal').classList.remove('hidden');
+    updateExistingLessonOrder();
+  }
+
+  function updateExistingLessonOrder() {
+    const selectedCourse = trainerDashboardData.courses.find(
+      course => course.id === document.getElementById('trainer-existing-course').value
+    );
+    const nextOrder = selectedCourse ? (selectedCourse.modules || []).length + 1 : 1;
+    document.getElementById('trainer-existing-lesson-order').textContent = `This will be lesson ${nextOrder}.`;
+  }
+
+  function closeTrainerModal(modalId) {
+    document.getElementById(modalId).classList.add('hidden');
+  }
+
+  async function submitLessonToCourse() {
+    const select = document.getElementById('trainer-existing-course');
+    const course = trainerDashboardData.courses.find(item => item.id === select.value);
+    if (!course) {
+      alert('Select one of your courses.');
+      return;
+    }
+
+    const lesson = document.querySelector('#trainer-existing-lesson-fields .trainer-lesson');
+    const payload = {
+      order_index: (course.modules || []).length + 1,
+      title: lesson.querySelector('.lesson-title').value.trim(),
+      video_url: lesson.querySelector('.lesson-video-url').value.trim(),
+      assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim(),
+      assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
+    };
+    const token = localStorage.getItem('jwt_token');
+    try {
+      const response = await fetch(`/trainer/courses/${encodeURIComponent(course.id)}/modules`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Could not add the lesson.');
+        return;
+      }
+      closeTrainerModal('trainer-lesson-modal');
+      await renderTrainerDashboard();
+    } catch (err) {
+      alert('Network error while adding the lesson.');
+    }
+  }
+
+  async function createTrainerCourse() {
+    const token = localStorage.getItem('jwt_token');
+    const lessons = Array.from(document.querySelectorAll('#trainer-course-lessons .trainer-lesson'));
+    const payload = {
+      title: document.getElementById('trainer-course-title').value.trim(),
+      description: document.getElementById('trainer-course-description').value.trim() || null,
+      modules: lessons.map((lesson, index) => ({
+        order_index: index + 1,
+        title: lesson.querySelector('.lesson-title').value.trim(),
+        video_url: lesson.querySelector('.lesson-video-url').value.trim(),
+        assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim(),
+        assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
+      })),
+    };
+
+    try {
+      const response = await fetch('/trainer/courses', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.detail || 'Could not create course.');
+        return;
+      }
+      document.getElementById('trainer-course-form').reset();
+      closeTrainerModal('trainer-course-modal');
+      await renderTrainerDashboard();
+    } catch (err) {
+      alert('Network error while creating course.');
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+seed_accounts.json
+.env
+.env.*
+!.env.example
