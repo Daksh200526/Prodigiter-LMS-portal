@@ -1430,9 +1430,19 @@ class TestLMSAPI(unittest.TestCase):
                 name="Course Student",
                 email=f"{student_id}@example.com",
                 role="student",
-                course_subject="Web Development",
+                is_access_granted=True,
             )
-            db.add_all([trainer, student])
+            existing_course = main.models.Course(
+                id=str(uuid.uuid4()),
+                title="Existing Trainer Course",
+                trainer_id=trainer_id,
+            )
+            existing_enrollment = main.models.Enrollment(
+                id=str(uuid.uuid4()),
+                student_id=student_id,
+                course_id=existing_course.id,
+            )
+            db.add_all([trainer, student, existing_course, existing_enrollment])
             db.commit()
 
             token = auth.create_access_token({"sub": trainer_id, "role": "trainer"})
@@ -1469,6 +1479,18 @@ class TestLMSAPI(unittest.TestCase):
                 student_id=student_id,
                 course_id=course.id,
             ).first())
+            student_headers = {
+                "Authorization": f"Bearer {auth.create_access_token({'sub': student_id, 'role': 'student'})}",
+            }
+            student_dashboard = self.client.get(
+                "/student/dashboard",
+                headers=student_headers,
+            )
+            self.assertEqual(student_dashboard.status_code, 200)
+            self.assertEqual(
+                [item["course_title"] for item in student_dashboard.json()["courses"]],
+                ["Existing Trainer Course"],
+            )
             assignment_response = self.client.post(
                 "/trainer/assign-course",
                 json={"student_id": student_id, "course_id": course.id},
@@ -1617,7 +1639,9 @@ class TestLMSAPI(unittest.TestCase):
         admin_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
         course_id = str(uuid.uuid4())
+        second_course_id = str(uuid.uuid4())
         enrollment_id = str(uuid.uuid4())
+        second_enrollment_id = str(uuid.uuid4())
         try:
             trainer = main.models.User(
                 id=trainer_id,
@@ -1645,6 +1669,11 @@ class TestLMSAPI(unittest.TestCase):
                 title="Progress Course",
                 trainer_id=trainer_id,
             )
+            second_course = main.models.Course(
+                id=second_course_id,
+                title="Second Progress Course",
+                trainer_id=trainer_id,
+            )
             first_module = main.models.Module(
                 id=str(uuid.uuid4()),
                 course_id=course_id,
@@ -1666,6 +1695,11 @@ class TestLMSAPI(unittest.TestCase):
                 student_id=student_id,
                 course_id=course_id,
             )
+            second_enrollment = main.models.Enrollment(
+                id=second_enrollment_id,
+                student_id=student_id,
+                course_id=second_course_id,
+            )
             incomplete_assignment = main.models.StudentProgress(
                 id=str(uuid.uuid4()),
                 enrollment_id=enrollment_id,
@@ -1681,8 +1715,8 @@ class TestLMSAPI(unittest.TestCase):
                 assignment_completed=True,
             )
             db.add_all([
-                trainer, admin, student, course, first_module, second_module,
-                enrollment, incomplete_assignment, complete_lesson,
+                trainer, admin, student, course, second_course, first_module, second_module,
+                enrollment, second_enrollment, incomplete_assignment, complete_lesson,
             ])
             db.commit()
 
@@ -1712,9 +1746,122 @@ class TestLMSAPI(unittest.TestCase):
             self.assertFalse(trainer_student["modules"][0]["assignment_completed"])
             self.assertEqual(admin_student["student_id"], student_id)
             self.assertEqual(admin_student["phone_number"], "9555555555")
-            self.assertEqual(admin_student["completed_slots"], 1)
-            self.assertEqual(admin_student["total_slots"], 2)
-            self.assertTrue(admin_student["enrolled_at"])
+            self.assertEqual(len(admin_response.json()["students"]), 1)
+            self.assertEqual(len(admin_student["courses"]), 2)
+            progress_course = next(
+                item for item in admin_student["courses"]
+                if item["course_title"] == "Progress Course"
+            )
+            self.assertEqual(progress_course["completed_slots"], 1)
+            self.assertEqual(progress_course["total_slots"], 2)
+            self.assertTrue(progress_course["enrolled_at"])
+        finally:
+            db.close()
+
+    def test_admin_can_delete_student_and_related_records_without_trainer_approval(self):
+        db = self.testing_session_local()
+        admin_id = str(uuid.uuid4())
+        trainer_id = str(uuid.uuid4())
+        student_id = str(uuid.uuid4())
+        course_id = str(uuid.uuid4())
+        module_id = str(uuid.uuid4())
+        enrollment_id = str(uuid.uuid4())
+        try:
+            admin = main.models.User(
+                id=admin_id,
+                name="Delete Admin",
+                email=f"{admin_id}@example.com",
+                role="admin",
+            )
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Delete Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            student = main.models.User(
+                id=student_id,
+                name="Delete Student",
+                email=f"{student_id}@example.com",
+                role="student",
+            )
+            course = main.models.Course(
+                id=course_id,
+                title="Delete Course",
+                trainer_id=trainer_id,
+            )
+            module = main.models.Module(
+                id=module_id,
+                course_id=course_id,
+                order_index=1,
+                title="Delete Lesson",
+                video_url="https://example.com/delete",
+                assignment_prompt="",
+            )
+            enrollment = main.models.Enrollment(
+                id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+            )
+            progress = main.models.StudentProgress(
+                id=str(uuid.uuid4()),
+                enrollment_id=enrollment_id,
+                module_id=module_id,
+            )
+            deletion_request = main.models.DeletionRequest(
+                id=str(uuid.uuid4()),
+                student_id=student_id,
+                trainer_id=trainer_id,
+                reason="Student requested deletion",
+            )
+            access_request = main.models.CourseAccessRequest(
+                id=str(uuid.uuid4()),
+                student_id=student_id,
+                course_id=course_id,
+            )
+            db.add_all([
+                admin, trainer, student, course, module, enrollment, progress,
+                deletion_request, access_request,
+            ])
+            db.commit()
+
+            admin_headers = {
+                "Authorization": f"Bearer {auth.create_access_token({'sub': admin_id, 'role': 'admin'})}"
+            }
+            trainer_headers = {
+                "Authorization": f"Bearer {auth.create_access_token({'sub': trainer_id, 'role': 'trainer'})}"
+            }
+
+            forbidden_response = self.client.delete(
+                f"/admin/students/{student_id}",
+                headers=trainer_headers,
+            )
+            delete_response = self.client.delete(
+                f"/admin/students/{student_id}",
+                headers=admin_headers,
+            )
+
+            self.assertEqual(forbidden_response.status_code, 403)
+            self.assertEqual(delete_response.status_code, 200, delete_response.text)
+            self.assertIsNone(db.query(main.models.User).filter_by(id=student_id).first())
+            self.assertEqual(
+                db.query(main.models.Enrollment).filter_by(student_id=student_id).count(),
+                0,
+            )
+            self.assertEqual(
+                db.query(main.models.StudentProgress).filter_by(
+                    enrollment_id=enrollment_id,
+                ).count(),
+                0,
+            )
+            self.assertEqual(
+                db.query(main.models.DeletionRequest).filter_by(student_id=student_id).count(),
+                0,
+            )
+            self.assertEqual(
+                db.query(main.models.CourseAccessRequest).filter_by(student_id=student_id).count(),
+                0,
+            )
         finally:
             db.close()
 

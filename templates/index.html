@@ -2246,7 +2246,162 @@
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Failed to load student progress.');
-    renderStudentTable(container, data.students || [], false);
+    renderAdminStudentTable(container, data.students || []);
+  }
+
+  function renderAdminStudentTable(container, students) {
+    container.replaceChildren();
+    if (!students.length) {
+      const message = document.createElement('p');
+      message.textContent = 'No students to display.';
+      container.appendChild(message);
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'student-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'student-table';
+    const header = table.createTHead().insertRow();
+    ['Student', 'Course', 'Progress', 'Action'].forEach(label => {
+      const cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = label;
+      header.appendChild(cell);
+    });
+
+    const body = table.createTBody();
+    students.forEach(student => {
+      const row = body.insertRow();
+      const studentCell = row.insertCell();
+      const detailsButton = document.createElement('button');
+      detailsButton.type = 'button';
+      detailsButton.className = 'profile-link-btn';
+      detailsButton.style.cssText = 'padding:0; border:0; background:transparent; color:inherit; font-weight:600; text-align:left;';
+      detailsButton.textContent = student.student_name;
+      detailsButton.setAttribute('aria-expanded', 'false');
+      studentCell.appendChild(detailsButton);
+
+      const courseCell = row.insertCell();
+      const progressCell = row.insertCell();
+      const actionCell = row.insertCell();
+      const courses = student.courses || [];
+      let selectedCourse = courses[0] || null;
+
+      const renderProgress = () => {
+        progressCell.replaceChildren();
+        if (!selectedCourse) {
+          progressCell.textContent = '—';
+          return;
+        }
+        const progress = document.createElement('div');
+        progress.className = 'student-progress';
+        progress.setAttribute('role', 'progressbar');
+        progress.setAttribute('aria-valuemin', '0');
+        progress.setAttribute('aria-valuemax', String(selectedCourse.total_slots || 0));
+        progress.setAttribute('aria-valuenow', String(selectedCourse.completed_slots || 0));
+        progress.setAttribute(
+          'aria-label',
+          `${selectedCourse.completed_slots || 0} of ${selectedCourse.total_slots || 0} lessons complete`
+        );
+        (selectedCourse.modules || []).forEach(module => {
+          const segment = document.createElement('span');
+          segment.className = 'student-progress-segment';
+          if (module.is_video_completed && module.assignment_completed) {
+            segment.classList.add('complete');
+          }
+          segment.setAttribute('aria-hidden', 'true');
+          progress.appendChild(segment);
+        });
+        progressCell.appendChild(progress);
+        const summary = document.createElement('small');
+        summary.textContent = `${selectedCourse.completed_slots || 0}/${selectedCourse.total_slots || 0}`;
+        progressCell.appendChild(summary);
+      };
+
+      if (courses.length > 1) {
+        const courseSelect = document.createElement('select');
+        courseSelect.setAttribute('aria-label', `Courses enrolled by ${student.student_name}`);
+        courses.forEach((course, index) => {
+          const option = document.createElement('option');
+          option.value = String(index);
+          option.textContent = course.course_title;
+          courseSelect.appendChild(option);
+        });
+        courseSelect.addEventListener('change', () => {
+          selectedCourse = courses[Number(courseSelect.value)] || null;
+          renderProgress();
+        });
+        courseCell.appendChild(courseSelect);
+      } else {
+        courseCell.textContent = selectedCourse ? selectedCourse.course_title : 'Not enrolled';
+      }
+
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'student-delete-btn';
+      deleteButton.textContent = '🗑';
+      deleteButton.title = `Delete ${student.student_name}`;
+      deleteButton.setAttribute('aria-label', `Delete ${student.student_name}`);
+      deleteButton.addEventListener('click', () => deleteStudentAsAdmin(student));
+      actionCell.appendChild(deleteButton);
+      renderProgress();
+
+      const detailsRow = body.insertRow();
+      detailsRow.className = 'admin-student-details hidden';
+      const detailsCell = detailsRow.insertCell();
+      detailsCell.colSpan = 4;
+      detailsCell.className = 'student-delete-form-cell';
+      const details = document.createElement('div');
+      const email = document.createElement('p');
+      email.textContent = `Email: ${student.student_email}`;
+      const phone = document.createElement('p');
+      phone.textContent = `Phone: ${student.phone_number || 'Not provided'}`;
+      const access = document.createElement('p');
+      access.textContent = `Account access: ${student.is_access_granted ? 'Granted' : 'Pending admin approval'}`;
+      const joined = document.createElement('p');
+      joined.textContent = `Registered: ${student.registered_at ? new Date(student.registered_at).toLocaleDateString() : '—'}`;
+      details.append(email, phone, access, joined);
+
+      const courseDetails = document.createElement('ul');
+      courses.forEach(course => {
+        const item = document.createElement('li');
+        const enrolled = course.enrolled_at
+          ? new Date(course.enrolled_at).toLocaleDateString()
+          : '—';
+        item.textContent = `${course.course_title}: enrolled ${enrolled}, ${course.completed_slots}/${course.total_slots} lessons complete`;
+        courseDetails.appendChild(item);
+      });
+      if (courses.length) details.appendChild(courseDetails);
+      detailsCell.appendChild(details);
+
+      detailsButton.addEventListener('click', () => {
+        const expanded = !detailsRow.classList.contains('hidden');
+        detailsRow.classList.toggle('hidden', expanded);
+        detailsButton.setAttribute('aria-expanded', String(!expanded));
+      });
+    });
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
+  }
+
+  async function deleteStudentAsAdmin(student) {
+    if (!confirm(`Permanently delete ${student.student_name} and all their course progress?`)) {
+      return;
+    }
+    const response = await fetch(
+      `/admin/students/${encodeURIComponent(student.student_id)}`,
+      {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.detail || 'Could not delete the student.');
+      return;
+    }
+    await renderAdminDashboard();
   }
 
   function renderStudentTable(container, students, canRequestDeletion, deletionStates = new Map()) {

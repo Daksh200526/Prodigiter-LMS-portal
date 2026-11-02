@@ -1805,20 +1805,7 @@ def admin_student_list(
             student.enrollments,
             key=lambda enrollment: enrollment.enrolled_at or datetime.datetime.min,
         )
-        if not enrollments:
-            student_rows.append({
-                "student_id": student.id,
-                "student_name": student.name,
-                "student_email": student.email,
-                "phone_number": student.phone_number,
-                "course_title": "Not enrolled",
-                "enrolled_at": None,
-                "completed_slots": 0,
-                "total_slots": 0,
-                "modules": [],
-            })
-            continue
-
+        courses = []
         for enrollment in enrollments:
             progress_by_module = {
                 progress.module_id: progress for progress in enrollment.progress_list
@@ -1837,18 +1824,45 @@ def admin_student_list(
                 1 for module in module_progress
                 if module["is_video_completed"] and module["assignment_completed"]
             )
-            student_rows.append({
-                "student_id": student.id,
-                "student_name": student.name,
-                "student_email": student.email,
-                "phone_number": student.phone_number,
+            courses.append({
+                "enrollment_id": enrollment.id,
                 "course_title": enrollment.course.title if enrollment.course else "Course",
                 "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
                 "completed_slots": completed_count,
                 "total_slots": len(module_progress),
                 "modules": module_progress,
             })
+        student_rows.append({
+            "student_id": student.id,
+            "student_name": student.name,
+            "student_email": student.email,
+            "phone_number": student.phone_number,
+            "is_access_granted": student.is_access_granted,
+            "registered_at": student.registered_at.isoformat() if student.registered_at else None,
+            "courses": courses,
+        })
     return {"students": student_rows}
+
+
+@app.delete("/admin/students/{student_id}")
+def admin_delete_student(
+    student_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("admin")),
+):
+    student = db.query(models.User).filter_by(
+        id=student_id,
+        role="student",
+    ).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    db.query(models.DeletionRequest).filter_by(student_id=student.id).delete(
+        synchronize_session=False,
+    )
+    db.delete(student)
+    db.commit()
+    return {"message": "Student and associated course records were deleted."}
 
 
 @app.post("/admin/trainers", status_code=201)
