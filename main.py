@@ -129,11 +129,10 @@ os.makedirs("templates", exist_ok=True)
 app.mount("/static", StaticFiles(directory="templates"), name="static")
 
 COURSE_SUBJECTS = (
+    "Cloud Computing",
     "Web Development",
     "Python Programming",
     "Data Science",
-    "Java Programming",
-    "Cloud Computing",
 )
 
 
@@ -214,6 +213,7 @@ class StudentRegister(BaseModel):
     email: EmailStr
     phone_number: str
     password: str
+    course_subject: str
 
 class PasswordLogin(BaseModel):
     email: EmailStr
@@ -255,6 +255,12 @@ def list_course_subjects():
 def register_student(payload: StudentRegister, db: Session = Depends(get_db)):
     if len(payload.password.encode("utf-8")) > 1024:
         raise HTTPException(status_code=400, detail="Password must be 1024 bytes or fewer.")
+    course_subject = normalize_course_subject(payload.course_subject)
+    if not course_subject:
+        raise HTTPException(
+            status_code=422,
+            detail="Choose one of the available major courses.",
+        )
     clean_phone = normalize_phone(payload.phone_number)
     if not clean_phone:
         raise HTTPException(status_code=400, detail="Invalid Indian mobile number format.")
@@ -273,6 +279,7 @@ def register_student(payload: StudentRegister, db: Session = Depends(get_db)):
         phone_number=clean_phone,
         hashed_password=hashed_pw,
         role="student",
+        course_subject=course_subject,
         is_access_granted=False
     )
     db.add(user)
@@ -1463,7 +1470,12 @@ def get_trainer_students(current_user: models.User = Depends(auth.get_current_us
         students_by_id[student.id] = student
 
     if current_user.role == "trainer":
-        matching_students = db.query(models.User).filter_by(role="student").all()
+        trainer_subject = normalize_course_subject(current_user.specialization)
+        matching_students = db.query(models.User).filter_by(
+            role="student",
+            course_subject=trainer_subject,
+            is_access_granted=True,
+        ).all() if trainer_subject else []
         for student in matching_students:
             students_by_id[student.id] = student
 
@@ -1520,6 +1532,14 @@ def assign_course_to_student(
     ).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
+    if current_user.role == "trainer" and (
+        normalize_course_subject(student.course_subject)
+        != normalize_course_subject(current_user.specialization)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only directly assign courses to students in your specialization.",
+        )
 
     existing_enr = db.query(models.Enrollment).filter(
         models.Enrollment.student_id == payload.student_id,
@@ -1837,6 +1857,7 @@ def admin_student_list(
             "student_name": student.name,
             "student_email": student.email,
             "phone_number": student.phone_number,
+            "course_subject": student.course_subject,
             "is_access_granted": student.is_access_granted,
             "registered_at": student.registered_at.isoformat() if student.registered_at else None,
             "courses": courses,
@@ -1863,6 +1884,35 @@ def admin_delete_student(
     db.delete(student)
     db.commit()
     return {"message": "Student and associated course records were deleted."}
+
+
+@app.patch("/admin/students/{student_id}/major")
+def admin_update_student_major(
+    student_id: str,
+    payload: schemas.StudentMajorUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("admin")),
+):
+    student = db.query(models.User).filter_by(
+        id=student_id,
+        role="student",
+    ).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    course_subject = normalize_course_subject(payload.course_subject)
+    if not course_subject:
+        raise HTTPException(
+            status_code=422,
+            detail="Choose one of the available major courses.",
+        )
+
+    student.course_subject = course_subject
+    db.commit()
+    return {
+        "student_id": student.id,
+        "course_subject": student.course_subject,
+    }
 
 
 @app.post("/admin/trainers", status_code=201)

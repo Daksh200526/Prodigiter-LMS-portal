@@ -865,6 +865,16 @@
           <input type="text" id="reg-phone" placeholder="9876543210" autocomplete="off">
         </div>
         <div class="form-group">
+          <label for="reg-course-subject">Choose your major course</label>
+          <select id="reg-course-subject" required>
+            <option value="">Select a major course</option>
+            <option value="Cloud Computing">Cloud Computing</option>
+            <option value="Web Development">Web Development</option>
+            <option value="Python Programming">Python Programming</option>
+            <option value="Data Science">Data Science</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Create Password</label>
           <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
         </div>
@@ -1061,7 +1071,6 @@
           <option value="Web Development">Web Development</option>
           <option value="Python Programming">Python Programming</option>
           <option value="Data Science">Data Science</option>
-          <option value="Java Programming">Java Programming</option>
           <option value="Cloud Computing">Cloud Computing</option>
         </select>
       </div>
@@ -1395,9 +1404,10 @@
     const email = document.getElementById('reg-email').value.trim();
     const phone_number = document.getElementById('reg-phone').value.trim();
     const password = document.getElementById('reg-password').value;
+    const course_subject = document.getElementById('reg-course-subject').value;
 
-    if (!name || !email || !phone_number || !password) {
-      alert("Please fill in all fields.");
+    if (!name || !email || !phone_number || !password || !course_subject) {
+      alert("Please complete all fields and choose a major course.");
       return;
     }
 
@@ -1405,7 +1415,7 @@
       const res = await fetch('/auth/register-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone_number, password })
+        body: JSON.stringify({ name, email, phone_number, password, course_subject })
       });
 
       const data = await res.json();
@@ -2516,7 +2526,42 @@
       access.textContent = `Account access: ${student.is_access_granted ? 'Granted' : 'Pending admin approval'}`;
       const joined = document.createElement('p');
       joined.textContent = `Registered: ${student.registered_at ? new Date(student.registered_at).toLocaleDateString() : '—'}`;
-      details.append(email, phone, access, joined);
+      const major = document.createElement('p');
+      major.textContent = `Major course: ${student.course_subject || 'Not selected'}`;
+      details.append(email, phone, access, joined, major);
+
+      const majorEditor = document.createElement('div');
+      majorEditor.style.cssText = 'display:flex; align-items:center; gap:0.5rem; max-width:32rem;';
+      const majorSelect = document.createElement('select');
+      majorSelect.setAttribute('aria-label', `Set major course for ${student.student_name}`);
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select a major course';
+      majorSelect.appendChild(placeholder);
+      [
+        'Cloud Computing',
+        'Web Development',
+        'Python Programming',
+        'Data Science',
+      ].forEach(subject => {
+        const option = document.createElement('option');
+        option.value = subject;
+        option.textContent = subject;
+        majorSelect.appendChild(option);
+      });
+      majorSelect.value = student.course_subject || '';
+      const saveMajorButton = document.createElement('button');
+      saveMajorButton.type = 'button';
+      saveMajorButton.className = 'profile-link-btn';
+      saveMajorButton.textContent = 'Save major';
+      saveMajorButton.addEventListener('click', () => updateStudentMajor(
+        student.student_id,
+        majorSelect,
+        saveMajorButton,
+        major,
+      ));
+      majorEditor.append(majorSelect, saveMajorButton);
+      details.appendChild(majorEditor);
 
       const courseDetails = document.createElement('ul');
       courses.forEach(course => {
@@ -2538,6 +2583,37 @@
     });
     wrapper.appendChild(table);
     container.appendChild(wrapper);
+  }
+
+  async function updateStudentMajor(studentId, majorSelect, saveButton, majorLabel) {
+    if (!majorSelect.value) {
+      alert('Select a major course for this student.');
+      return;
+    }
+
+    saveButton.disabled = true;
+    try {
+      const response = await fetch(
+        `/admin/students/${encodeURIComponent(studentId)}/major`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ course_subject: majorSelect.value }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not update the student major.');
+      }
+      majorLabel.textContent = `Major course: ${data.course_subject}`;
+    } catch (error) {
+      alert(error.message || 'Could not update the student major.');
+    } finally {
+      saveButton.disabled = false;
+    }
   }
 
   async function deleteStudentAsAdmin(student) {

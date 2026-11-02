@@ -62,6 +62,12 @@ class TestLMSAPI(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("Prodigiter LMS Portal", response.text)
+        self.assertIn('id="reg-course-subject"', response.text)
+        self.assertIn('<option value="Cloud Computing">Cloud Computing</option>', response.text)
+        self.assertIn('<option value="Web Development">Web Development</option>', response.text)
+        self.assertIn('<option value="Python Programming">Python Programming</option>', response.text)
+        self.assertIn('<option value="Data Science">Data Science</option>', response.text)
+        self.assertNotIn('<option value="Java Programming">', response.text)
 
     def test_student_registration_and_login(self):
         email = "newstudent@example.com"
@@ -92,6 +98,25 @@ class TestLMSAPI(unittest.TestCase):
                 "course_subject": "Web Development",
             },
         )
+        missing_course_response = self.client.post(
+            "/auth/register-student",
+            json={
+                "name": "Missing Major Student",
+                "email": "missing-major@example.com",
+                "phone_number": "9900000002",
+                "password": password,
+            },
+        )
+        invalid_course_response = self.client.post(
+            "/auth/register-student",
+            json={
+                "name": "Invalid Major Student",
+                "email": "invalid-major@example.com",
+                "phone_number": "9900000003",
+                "password": password,
+                "course_subject": "Java Programming",
+            },
+        )
         login_response = self.client.post(
             "/auth/login-password",
             json={"email": email, "password": password},
@@ -99,6 +124,8 @@ class TestLMSAPI(unittest.TestCase):
         self.assertEqual(login_response.status_code, 200, login_response.text)
         self.assertEqual(login_response.json()["role"], "student")
         self.assertEqual(duplicate_phone_response.status_code, 400)
+        self.assertEqual(missing_course_response.status_code, 422)
+        self.assertEqual(invalid_course_response.status_code, 422)
 
     def test_enrolled_students_receive_projects_in_a_repeating_sequence(self):
         db = self.testing_session_local()
@@ -445,13 +472,22 @@ class TestLMSAPI(unittest.TestCase):
 
             subjects_response = self.client.get("/courses/subjects")
             self.assertEqual(subjects_response.status_code, 200)
-            self.assertEqual(subjects_response.json()["subjects"], list(main.COURSE_SUBJECTS))
+            self.assertEqual(
+                subjects_response.json()["subjects"],
+                [
+                    "Cloud Computing",
+                    "Web Development",
+                    "Python Programming",
+                    "Data Science",
+                ],
+            )
 
             registration_data = {
                 "name": "Course Student",
                 "email": f"{uuid.uuid4()}@example.com",
                 "phone_number": f"9{uuid.uuid4().int % 1000000000:09d}",
                 "password": "StrongPass123!",
+                "course_subject": "Web Development",
             }
             web_registration = self.client.post(
                 "/auth/register-student",
@@ -488,6 +524,22 @@ class TestLMSAPI(unittest.TestCase):
             )
             self.assertEqual(web_course_response.status_code, 201)
             self.assertEqual(python_course_response.status_code, 201)
+            web_dashboard_response = self.client.get(
+                "/trainer/dashboard",
+                headers=web_headers,
+            )
+            python_dashboard_response = self.client.get(
+                "/trainer/dashboard",
+                headers=python_headers,
+            )
+            self.assertEqual(
+                [course["title"] for course in web_dashboard_response.json()["courses"]],
+                ["Subject Course"],
+            )
+            self.assertEqual(
+                [course["title"] for course in python_dashboard_response.json()["courses"]],
+                ["Python Subject Course"],
+            )
 
             python_registration = self.client.post(
                 "/auth/register-student",
@@ -496,6 +548,7 @@ class TestLMSAPI(unittest.TestCase):
                     "name": "Python Student",
                     "email": f"{uuid.uuid4()}@example.com",
                     "phone_number": f"9{uuid.uuid4().int % 1000000000:09d}",
+                    "course_subject": "Python Programming",
                 },
             )
             self.assertEqual(python_registration.status_code, 200)
@@ -532,7 +585,32 @@ class TestLMSAPI(unittest.TestCase):
             ]
             self.assertIn("Subject Course", web_catalog_titles)
             self.assertIn("Python Subject Course", web_catalog_titles)
-            self.assertIsNone(web_student.course_subject)
+            self.assertEqual(web_student.course_subject, "Web Development")
+            self.assertEqual(python_student.course_subject, "Python Programming")
+            web_trainer_students = self.client.get(
+                "/trainer/my-students",
+                headers=web_headers,
+            )
+            python_trainer_students = self.client.get(
+                "/trainer/my-students",
+                headers=python_headers,
+            )
+            self.assertIn(
+                web_student_id,
+                [student["id"] for student in web_trainer_students.json()["students"]],
+            )
+            self.assertNotIn(
+                web_student_id,
+                [student["id"] for student in python_trainer_students.json()["students"]],
+            )
+            self.assertIn(
+                python_student_id,
+                [student["id"] for student in python_trainer_students.json()["students"]],
+            )
+            self.assertNotIn(
+                python_student_id,
+                [student["id"] for student in web_trainer_students.json()["students"]],
+            )
             web_dashboard_before_request = self.client.get(
                 "/student/dashboard",
                 headers=web_student_headers,
@@ -686,10 +764,11 @@ class TestLMSAPI(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    def test_trainer_can_directly_assign_a_course_to_any_new_student(self):
+    def test_trainer_can_directly_assign_a_course_to_a_matching_major_student(self):
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
+        mismatched_student_id = str(uuid.uuid4())
         course_id = str(uuid.uuid4())
         try:
             trainer = main.models.User(
@@ -704,6 +783,14 @@ class TestLMSAPI(unittest.TestCase):
                 name="New Cloud Student",
                 email=f"{student_id}@example.com",
                 role="student",
+                course_subject="Cloud Computing",
+                is_access_granted=True,
+            )
+            mismatched_student = main.models.User(
+                id=mismatched_student_id,
+                name="Data Science Student",
+                email=f"{mismatched_student_id}@example.com",
+                role="student",
                 course_subject="Data Science",
                 is_access_granted=True,
             )
@@ -712,7 +799,7 @@ class TestLMSAPI(unittest.TestCase):
                 title="Cloud Foundations",
                 trainer_id=trainer_id,
             )
-            db.add_all([trainer, student, course])
+            db.add_all([trainer, student, mismatched_student, course])
             db.commit()
             headers = {
                 "Authorization": f"Bearer {auth.create_access_token({'sub': trainer_id, 'role': 'trainer'})}",
@@ -725,6 +812,10 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(eligible_students.status_code, 200)
             self.assertIn(
                 student_id,
+                [item["id"] for item in eligible_students.json()["students"]],
+            )
+            self.assertNotIn(
+                mismatched_student_id,
                 [item["id"] for item in eligible_students.json()["students"]],
             )
             self.assertIsNone(db.query(main.models.Enrollment).filter_by(
@@ -740,6 +831,16 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(assignment.status_code, 200, assignment.text)
             self.assertIsNotNone(db.query(main.models.Enrollment).filter_by(
                 student_id=student_id,
+                course_id=course_id,
+            ).first())
+            mismatched_assignment = self.client.post(
+                "/trainer/assign-course",
+                json={"student_id": mismatched_student_id, "course_id": course_id},
+                headers=headers,
+            )
+            self.assertEqual(mismatched_assignment.status_code, 403)
+            self.assertIsNone(db.query(main.models.Enrollment).filter_by(
+                student_id=mismatched_student_id,
                 course_id=course_id,
             ).first())
         finally:
@@ -1430,6 +1531,7 @@ class TestLMSAPI(unittest.TestCase):
                 name="Course Student",
                 email=f"{student_id}@example.com",
                 role="student",
+                course_subject="Web Development",
                 is_access_granted=True,
             )
             existing_course = main.models.Course(
@@ -1746,6 +1848,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertFalse(trainer_student["modules"][0]["assignment_completed"])
             self.assertEqual(admin_student["student_id"], student_id)
             self.assertEqual(admin_student["phone_number"], "9555555555")
+            self.assertEqual(admin_student["course_subject"], "Web Development")
             self.assertEqual(len(admin_response.json()["students"]), 1)
             self.assertEqual(len(admin_student["courses"]), 2)
             progress_course = next(
@@ -1860,6 +1963,84 @@ class TestLMSAPI(unittest.TestCase):
             )
             self.assertEqual(
                 db.query(main.models.CourseAccessRequest).filter_by(student_id=student_id).count(),
+                0,
+            )
+        finally:
+            db.close()
+
+    def test_admin_can_set_legacy_student_major_for_matching_trainer_visibility(self):
+        db = self.testing_session_local()
+        admin_id = str(uuid.uuid4())
+        trainer_id = str(uuid.uuid4())
+        student_id = str(uuid.uuid4())
+        try:
+            admin = main.models.User(
+                id=admin_id,
+                name="Major Admin",
+                email=f"{admin_id}@example.com",
+                role="admin",
+            )
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Major Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+                specialization="Cloud Computing",
+            )
+            student = main.models.User(
+                id=student_id,
+                name="Legacy Student",
+                email=f"{student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            db.add_all([admin, trainer, student])
+            db.commit()
+            admin_headers = {
+                "Authorization": f"Bearer {auth.create_access_token({'sub': admin_id, 'role': 'admin'})}"
+            }
+            trainer_headers = {
+                "Authorization": f"Bearer {auth.create_access_token({'sub': trainer_id, 'role': 'trainer'})}"
+            }
+
+            before_update = self.client.get(
+                "/trainer/my-students",
+                headers=trainer_headers,
+            )
+            denied_update = self.client.patch(
+                f"/admin/students/{student_id}/major",
+                json={"course_subject": "Cloud Computing"},
+                headers=trainer_headers,
+            )
+            invalid_update = self.client.patch(
+                f"/admin/students/{student_id}/major",
+                json={"course_subject": "Java Programming"},
+                headers=admin_headers,
+            )
+            major_update = self.client.patch(
+                f"/admin/students/{student_id}/major",
+                json={"course_subject": "Cloud Computing"},
+                headers=admin_headers,
+            )
+            after_update = self.client.get(
+                "/trainer/my-students",
+                headers=trainer_headers,
+            )
+
+            self.assertEqual(before_update.status_code, 200)
+            self.assertNotIn(
+                student_id,
+                [item["id"] for item in before_update.json()["students"]],
+            )
+            self.assertEqual(denied_update.status_code, 403)
+            self.assertEqual(invalid_update.status_code, 422)
+            self.assertEqual(major_update.status_code, 200, major_update.text)
+            self.assertIn(
+                student_id,
+                [item["id"] for item in after_update.json()["students"]],
+            )
+            self.assertEqual(
+                db.query(main.models.Enrollment).filter_by(student_id=student_id).count(),
                 0,
             )
         finally:

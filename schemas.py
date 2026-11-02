@@ -41,6 +41,9 @@ class CourseAccessDecision(BaseModel):
 class CourseAccessRequestCreate(BaseModel):
     course_id: str
 
+class StudentMajorUpdate(BaseModel):
+    course_subject: str
+
 class AssignmentEvaluation(BaseModel):
     progress_id: str
     is_approved: bool
