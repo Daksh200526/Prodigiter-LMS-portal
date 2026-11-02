@@ -198,21 +198,6 @@ def _enroll_student_in_course(
     db.flush()
 
 
-def _enroll_subject_students_in_course(db: Session, course: models.Course) -> None:
-    subject = normalize_course_subject(course.trainer.specialization if course.trainer else None)
-    if not subject:
-        return
-    students = db.query(models.User).filter_by(
-        role="student",
-        course_subject=subject,
-    ).order_by(
-        models.User.registered_at,
-        models.User.id,
-    ).all()
-    for student in students:
-        _enroll_student_in_course(db, student, course)
-
-
 def _student_matches_course_subject(student: models.User, course: models.Course) -> bool:
     if not student.course_subject:
         return True
@@ -220,6 +205,14 @@ def _student_matches_course_subject(student: models.User, course: models.Course)
         course.trainer.specialization if course.trainer else None
     )
     return trainer_subject == normalize_course_subject(student.course_subject)
+
+
+def _student_is_eligible_for_course(student: models.User, course: models.Course) -> bool:
+    student_subject = normalize_course_subject(student.course_subject)
+    trainer_subject = normalize_course_subject(
+        course.trainer.specialization if course.trainer else None
+    )
+    return bool(student_subject and trainer_subject and student_subject == trainer_subject)
 
 
 def _lesson_question_payload(question: models.LessonQuestion) -> dict:
@@ -317,13 +310,6 @@ def register_student(payload: StudentRegister, db: Session = Depends(get_db)):
             detail="An account with this email or phone number already exists.",
         ) from None
     db.refresh(user)
-    trainers = db.query(models.User).filter_by(role="trainer").all()
-    for trainer in trainers:
-        if normalize_course_subject(trainer.specialization) != selected_subject:
-            continue
-        for course in trainer.courses_taught:
-            _enroll_student_in_course(db, user, course)
-    db.commit()
 
     token = auth.create_access_token({"sub": user.id, "role": user.role})
     return {
@@ -684,18 +670,169 @@ def student_dashboard(
                 ],
             })
 
-        # courses_data.append({
-        #     "enrollment_id": enr.id,
-        #     "course_title": enr.course.title if enr.course else "Course",
-        #     "trainer_name": enr.course.trainer.name if enr.course and enr.course.trainer else "Trainer",
-        #     "completed_slots": completed_count,
-        #     "modules": modules_list
-        # })
+        courses_data.append({
+            "enrollment_id": enr.id,
+            "course_title": enr.course.title,
+            "trainer_name": enr.course.trainer.name if enr.course.trainer else "Trainer",
+            "completed_slots": completed_count,
+            "modules": modules_list,
+        })
 
     return {
         "course_subject": current_user.course_subject,
         "courses": courses_data,
     }
+
+
+@app.get("/student/course-catalog")
+def student_course_catalog(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    if not current_user.is_access_granted:
+        raise HTTPException(status_code=403, detail="Your account is awaiting administrative clearance.")
+
+    courses = db.query(models.Course).options(
+        joinedload(models.Course.trainer),
+    ).order_by(models.Course.title, models.Course.id).all()
+    matching_courses = [
+        course for course in courses
+        if _student_is_eligible_for_course(current_user, course)
+    ]
+    course_ids = [course.id for course in matching_courses]
+    request_by_course = {
+        request.course_id: request
+        for request in db.query(models.CourseAccessRequest).filter(
+            models.CourseAccessRequest.student_id == current_user.id,
+            models.CourseAccessRequest.course_id.in_(course_ids),
+        ).all()
+    } if course_ids else {}
+    enrolled_course_ids = {
+        enrollment.course_id
+        for enrollment in db.query(models.Enrollment).filter_by(
+            student_id=current_user.id,
+        ).all()
+    }
+
+    return {
+        "courses": [
+            {
+                "id": course.id,
+                "title": course.title,
+                "description": course.description,
+                "trainer_name": course.trainer.name if course.trainer else "Trainer",
+                "status": (
+                    "enrolled" if course.id in enrolled_course_ids
+                    else request_by_course[course.id].status
+                    if course.id in request_by_course
+                    else "available"
+                ),
+            }
+            for course in matching_courses
+        ],
+    }
+
+
+@app.post("/student/course-access-requests", status_code=201)
+def request_course_access(
+    payload: schemas.CourseAccessRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    if not current_user.is_access_granted:
+        raise HTTPException(status_code=403, detail="Your account is awaiting administrative clearance.")
+
+    course = db.query(models.Course).options(
+        joinedload(models.Course.trainer),
+    ).filter_by(id=payload.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    if not _student_is_eligible_for_course(current_user, course):
+        raise HTTPException(status_code=403, detail="This course is not available for your selected subject.")
+    if db.query(models.Enrollment).filter_by(
+        student_id=current_user.id,
+        course_id=course.id,
+    ).first():
+        raise HTTPException(status_code=409, detail="You are already enrolled in this course.")
+
+    access_request = db.query(models.CourseAccessRequest).filter_by(
+        student_id=current_user.id,
+        course_id=course.id,
+    ).first()
+    if access_request and access_request.status in {"pending", "approved"}:
+        raise HTTPException(status_code=409, detail="A request for this course already exists.")
+
+    if access_request:
+        access_request.status = "pending"
+        access_request.created_at = datetime.datetime.utcnow()
+        access_request.responded_at = None
+    else:
+        access_request = models.CourseAccessRequest(
+            id=str(uuid.uuid4()),
+            student_id=current_user.id,
+            course_id=course.id,
+        )
+        db.add(access_request)
+    db.commit()
+    return {"request_id": access_request.id, "status": "pending"}
+
+
+@app.get("/trainer/course-access-requests")
+def trainer_course_access_requests(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    requests = db.query(models.CourseAccessRequest).join(
+        models.Course,
+    ).options(
+        joinedload(models.CourseAccessRequest.student),
+        joinedload(models.CourseAccessRequest.course),
+    ).filter(
+        models.Course.trainer_id == current_user.id,
+        models.CourseAccessRequest.status == "pending",
+    ).order_by(models.CourseAccessRequest.created_at).all()
+    return {
+        "requests": [
+            {
+                "id": access_request.id,
+                "student_id": access_request.student_id,
+                "student_name": access_request.student.name,
+                "student_email": access_request.student.email,
+                "course_id": access_request.course_id,
+                "course_title": access_request.course.title,
+                "created_at": access_request.created_at.isoformat(),
+            }
+            for access_request in requests
+        ],
+    }
+
+
+@app.post("/trainer/course-access-requests/{request_id}/decision")
+def decide_course_access_request(
+    request_id: str,
+    payload: schemas.CourseAccessDecision,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    access_request = db.query(models.CourseAccessRequest).options(
+        joinedload(models.CourseAccessRequest.student),
+        joinedload(models.CourseAccessRequest.course).joinedload(models.Course.trainer),
+    ).filter_by(id=request_id).first()
+    if not access_request or access_request.course.trainer_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Course access request not found.")
+    if access_request.status != "pending":
+        raise HTTPException(status_code=409, detail="This request has already been decided.")
+
+    if payload.approved:
+        if not _student_is_eligible_for_course(access_request.student, access_request.course):
+            raise HTTPException(status_code=409, detail="The student's selected subject no longer matches this course.")
+        _enroll_student_in_course(db, access_request.student, access_request.course)
+        access_request.status = "approved"
+    else:
+        access_request.status = "rejected"
+    access_request.responded_at = datetime.datetime.utcnow()
+    db.commit()
+    return {"request_id": access_request.id, "status": access_request.status}
 
 
 def _module_unlock_status(
@@ -1358,63 +1495,66 @@ class CourseAssignPayload(BaseModel):
     student_id: str
     course_id: str
 
-# 1. Fetch all students currently under the logged-in trainer
+# List enrolled students and subject-matched students eligible for assignment.
 @app.get("/trainer/my-students")
 def get_trainer_students(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
     if current_user.role not in ["trainer", "admin"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # If admin, fetch all courses; if trainer, fetch only courses owned by this trainer
     if current_user.role == "admin":
-        trainer_courses = db.query(models.Course).all()
+        trainer_courses = db.query(models.Course).options(
+            joinedload(models.Course.trainer),
+        ).all()
     else:
-        trainer_courses = db.query(models.Course).filter(models.Course.trainer_id == current_user.id).all()
-    
-    trainer_course_ids = [c.id for c in trainer_courses]
+        trainer_courses = db.query(models.Course).options(
+            joinedload(models.Course.trainer),
+        ).filter(models.Course.trainer_id == current_user.id).all()
 
-    # Find all enrollments under these courses
+    trainer_course_ids = [c.id for c in trainer_courses]
     enrollments = db.query(models.Enrollment).filter(
         models.Enrollment.course_id.in_(trainer_course_ids)
-    ).all()
-
-    # Group students and collect their enrolled courses
-    students_dict = {}
+    ).all() if trainer_course_ids else []
+    students_by_id = {}
     for enr in enrollments:
-        student = db.query(models.User).filter(models.User.id == enr.student_id).first()
+        student = enr.student or db.get(models.User, enr.student_id)
         if not student:
             continue
-        
-        if student.id not in students_dict:
-            students_dict[student.id] = {
-                "id": student.id,
-                "name": student.name,
-                "email": student.email,
-                "phone_number": student.phone_number,
-                "enrolled_course_ids": set(),
-                "enrolled_courses": []
-            }
-        course = next((c for c in trainer_courses if c.id == enr.course_id), None)
-        if course:
-            students_dict[student.id]["enrolled_course_ids"].add(course.id)
-            students_dict[student.id]["enrolled_courses"].append({
-                "id": course.id,
-                "title": course.title
-            })
+        students_by_id[student.id] = student
 
-    # Prepare response: For each student, include eligible courses they are NOT yet enrolled in
+    if current_user.role == "trainer":
+        matching_students = db.query(models.User).filter_by(role="student").all()
+        trainer_subject = normalize_course_subject(current_user.specialization)
+        for student in matching_students:
+            if trainer_subject and normalize_course_subject(student.course_subject) == trainer_subject:
+                students_by_id[student.id] = student
+
     result = []
-    for s_id, s_data in students_dict.items():
+    for student in students_by_id.values():
+        student_enrollments = [
+            enrollment for enrollment in enrollments
+            if enrollment.student_id == student.id
+        ]
+        enrolled_course_ids = {enrollment.course_id for enrollment in student_enrollments}
+        already_under_trainer = bool(enrolled_course_ids)
         available_to_assign = [
             {"id": c.id, "title": c.title}
             for c in trainer_courses
-            if c.id not in s_data["enrolled_course_ids"]
+            if c.id not in enrolled_course_ids
+            and (
+                already_under_trainer
+                or _student_is_eligible_for_course(student, c)
+            )
         ]
         result.append({
-            "id": s_data["id"],
-            "name": s_data["name"],
-            "email": s_data["email"],
-            "phone_number": s_data["phone_number"],
-            "enrolled_courses": s_data["enrolled_courses"],
+            "id": student.id,
+            "name": student.name,
+            "email": student.email,
+            "phone_number": student.phone_number,
+            "enrolled_courses": [
+                {"id": enrollment.course.id, "title": enrollment.course.title}
+                for enrollment in student_enrollments
+                if enrollment.course
+            ],
             "available_to_assign": available_to_assign
         })
 
@@ -1430,17 +1570,17 @@ def assign_course_to_student(
     db: Session = Depends(get_db)
 ):
     # Verify target course exists
-    target_course = db.query(models.Course).filter(models.Course.id == payload.course_id).first()
+    target_course = db.query(models.Course).options(
+        joinedload(models.Course.trainer),
+    ).filter(models.Course.id == payload.course_id).first()
     if not target_course:
         raise HTTPException(status_code=404, detail="Target course not found")
 
     # ROLE VERIFICATION:
     if current_user.role == "trainer":
-        # Rule 1: Trainer must own the course they want to assign
         if target_course.trainer_id != current_user.id:
             raise HTTPException(status_code=403, detail="You can only assign courses that you instruct.")
 
-        # Rule 2: Student must already be enrolled in at least one course taught by this trainer
         trainer_course_ids = [
             c.id for c in db.query(models.Course).filter(models.Course.trainer_id == current_user.id).all()
         ]
@@ -1448,15 +1588,31 @@ def assign_course_to_student(
             models.Enrollment.student_id == payload.student_id,
             models.Enrollment.course_id.in_(trainer_course_ids)
         ).first()
-
-        if not is_student_under_trainer:
-            raise HTTPException(status_code=403, detail="You can only assign additional courses to students already enrolled under you.")
+        student = db.query(models.User).filter_by(
+            id=payload.student_id,
+            role="student",
+        ).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found.")
+        if not is_student_under_trainer and not _student_is_eligible_for_course(
+            student,
+            target_course,
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only assign courses to students under your instruction.",
+            )
 
     elif current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Unauthorized")
-    # Note: Admin bypasses the checks above and has universal authority to assign any course to any student.
+    else:
+        student = db.query(models.User).filter_by(
+            id=payload.student_id,
+            role="student",
+        ).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found.")
 
-    # Check if student is already enrolled in this exact course
     existing_enr = db.query(models.Enrollment).filter(
         models.Enrollment.student_id == payload.student_id,
         models.Enrollment.course_id == payload.course_id
@@ -1464,31 +1620,15 @@ def assign_course_to_student(
     if existing_enr:
         raise HTTPException(status_code=400, detail="Student is already enrolled in this course.")
 
-    # Create the new enrollment
-    new_enrollment = models.Enrollment(
-        student_id=payload.student_id,
-        course_id=payload.course_id
-    )
-    db.add(new_enrollment)
-    db.flush()
-
-    # Initialize progress for the first module of the newly assigned course
-    first_module = db.query(models.Module).filter(
-        models.Module.course_id == payload.course_id
-    ).order_index if hasattr(models.Module, 'order_index') else None
-    
-    first_mod = db.query(models.Module).filter(
-        models.Module.course_id == payload.course_id
-    ).order_by(models.Module.order_index.asc()).first()
-
-    if first_mod:
-        new_prog = models.Progress(
-            enrollment_id=new_enrollment.id,
-            module_id=first_mod.id,
-            is_video_completed=False,
-            assignment_status="not_submitted"
-        )
-        db.add(new_prog)
+    _enroll_student_in_course(db, student, target_course)
+    access_request = db.query(models.CourseAccessRequest).filter_by(
+        student_id=student.id,
+        course_id=target_course.id,
+        status="pending",
+    ).first()
+    if access_request:
+        access_request.status = "approved"
+        access_request.responded_at = datetime.datetime.utcnow()
 
     db.commit()
     return {"status": "success", "message": f"Successfully assigned '{target_course.title}' to the student."}

@@ -756,8 +756,12 @@
 
   <!-- Student Workspace Layout -->
   <div id="student-view" class="student-layout hidden">
-    <!-- Left Sidebar: Lessons -->
+    <!-- Left Sidebar: Course catalog and lessons -->
     <div class="lessons-sidebar">
+      <section style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);">
+        <h3 style="margin: 0 0 0.5rem;">Courses for you</h3>
+        <div id="student-course-catalog">Loading courses...</div>
+      </section>
       <div class="sidebar-header" id="course-title-header">Course Modules</div>
       <div id="course-trainer-name" style="padding: 0.65rem 1rem; color: #64748b; font-size: 0.9rem;">
         Trainer: —
@@ -831,8 +835,8 @@
       </div>
 
       <div id="student-no-courses" class="hidden">
-        <h3>No Enrolled Courses Found</h3>
-        <p>Your account is active, but you have not yet been assigned to an active curriculum. Please contact your administrator.</p>
+        <h3>No Enrolled Courses Yet</h3>
+        <p>Browse the courses on the left and request access. Your course will appear here after the trainer approves your request.</p>
       </div>
 
       <div id="student-pending-alert" class="hidden">
@@ -874,8 +878,13 @@
     <div class="card" style="margin-bottom: 1.5rem; background: #ffffff; border-color: #cbd5e1;">
       <h4 style="margin-top: 0; margin-bottom: 0.35rem;">Course Assignment (Students Under Your Instruction)</h4>
       <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 1rem;">
-        You can assign additional courses you teach to students who are currently enrolled under you.
+        Review course access requests or assign a course directly to a student whose subject matches your specialization.
       </p>
+      <h5 style="margin: 0.75rem 0;">Course access requests</h5>
+      <div id="trainer-course-access-requests" style="margin-bottom: 1.25rem;">
+        Loading course access requests...
+      </div>
+      <h5 style="margin: 0.75rem 0;">Assign a course directly</h5>
       <div id="trainer-assign-students-container" style="overflow-x: auto;">
         Loading eligible students...
       </div>
@@ -1544,7 +1553,7 @@
   /* Student Dashboard Engine */
   async function renderStudentDashboard() {
     document.getElementById('student-view').classList.remove('hidden');
-    document.getElementById('video-content-pane').classList.remove('hidden');
+    document.getElementById('video-content-pane').classList.add('hidden');
     document.getElementById('student-pending-alert').classList.add('hidden');
     document.getElementById('student-no-courses').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
@@ -1558,24 +1567,27 @@
       if (!res.ok) throw new Error(data.detail || 'Failed to load student curriculum.');
 
       if (data.alert) {
-        document.getElementById('video-content-pane').classList.add('hidden');
         document.getElementById('student-pending-alert').classList.remove('hidden');
+        document.getElementById('student-course-catalog').textContent =
+          'Courses will be available after your account is cleared.';
         return;
       }
 
-      if (!data.courses || data.courses.length === 0) {
-        document.getElementById('video-content-pane').classList.add('hidden');
+      studentCourseOptions = data.courses || [];
+      await loadStudentCourseCatalog();
+
+      if (studentCourseOptions.length === 0) {
         document.getElementById('student-no-courses').classList.remove('hidden');
         return;
       }
 
-      studentCourseOptions = data.courses;
+      document.getElementById('video-content-pane').classList.remove('hidden');
       const courseSelect = document.getElementById('student-course-select');
-      const selectedCourse = data.courses.find(
+      const selectedCourse = studentCourseOptions.find(
         course => course.enrollment_id === activeEnrollmentId
-      ) || data.courses[0];
+      ) || studentCourseOptions[0];
       courseSelect.replaceChildren();
-      data.courses.forEach(course => {
+      studentCourseOptions.forEach(course => {
         const option = document.createElement('option');
         option.value = course.enrollment_id;
         option.textContent = course.course_title;
@@ -1584,7 +1596,7 @@
       courseSelect.value = selectedCourse.enrollment_id;
       document.getElementById('student-course-picker').classList.toggle(
         'hidden',
-        data.courses.length < 2
+        studentCourseOptions.length < 2
       );
       courseSelect.onchange = () => {
         const course = studentCourseOptions.find(
@@ -1594,7 +1606,93 @@
       };
       renderStudentCourse(selectedCourse);
     } catch (err) {
-      alert("Error loading student curriculum.");
+      document.getElementById('student-course-catalog').textContent =
+        err.message || 'Could not load your course dashboard.';
+    }
+  }
+
+  async function loadStudentCourseCatalog() {
+    const container = document.getElementById('student-course-catalog');
+    const response = await fetch('/student/course-catalog', {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to load courses.');
+    }
+
+    container.replaceChildren();
+    if (!data.courses || data.courses.length === 0) {
+      container.textContent = 'No courses currently match your selected subject.';
+      return;
+    }
+
+    data.courses.forEach(course => {
+      const card = document.createElement('div');
+      card.style.cssText = 'padding:0.65rem 0; border-top:1px solid var(--border);';
+      const title = document.createElement('strong');
+      title.textContent = course.title;
+      card.appendChild(title);
+
+      const trainer = document.createElement('div');
+      trainer.style.cssText = 'color:#64748b; font-size:0.85rem; margin:0.2rem 0 0.45rem;';
+      trainer.textContent = `Trainer: ${course.trainer_name}`;
+      card.appendChild(trainer);
+
+      if (course.description) {
+        const description = document.createElement('p');
+        description.style.cssText = 'margin:0 0 0.45rem; color:#475569; font-size:0.85rem;';
+        description.textContent = course.description;
+        card.appendChild(description);
+      }
+
+      if (course.status === 'enrolled') {
+        const enrolled = document.createElement('span');
+        enrolled.className = 'badge badge-success';
+        enrolled.textContent = 'Enrolled';
+        card.appendChild(enrolled);
+      } else if (course.status === 'pending') {
+        const pending = document.createElement('span');
+        pending.className = 'badge badge-warning';
+        pending.textContent = 'Request pending';
+        card.appendChild(pending);
+      } else {
+        const requestButton = document.createElement('button');
+        requestButton.type = 'button';
+        requestButton.className = 'profile-link-btn';
+        requestButton.style.cssText = 'font-size:0.85rem; padding:0.4rem 0.65rem;';
+        requestButton.textContent = course.status === 'rejected'
+          ? 'Request access again'
+          : 'Request access';
+        requestButton.addEventListener('click', () => requestCourseAccess(
+          course.id,
+          requestButton
+        ));
+        card.appendChild(requestButton);
+      }
+      container.appendChild(card);
+    });
+  }
+
+  async function requestCourseAccess(courseId, button) {
+    button.disabled = true;
+    try {
+      const response = await fetch('/student/course-access-requests', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ course_id: courseId })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not request course access.');
+      }
+      await loadStudentCourseCatalog();
+    } catch (err) {
+      button.disabled = false;
+      alert(err.message || 'Could not request course access.');
     }
   }
 
@@ -2408,8 +2506,10 @@
     const token = localStorage.getItem('jwt_token');
     const headers = { 'Authorization': 'Bearer ' + token };
     
-    // Load student assignment panel
-    loadTrainerStudentAssignmentPanel();
+    await Promise.all([
+      loadTrainerStudentAssignmentPanel(),
+      loadTrainerCourseAccessRequests(),
+    ]);
 
     const courseContainer = document.getElementById('trainer-courses');
     const dashboardResponse = await fetch('/trainer/dashboard', { headers });
@@ -2621,7 +2721,7 @@
       }
 
       if (!data.students || data.students.length === 0) {
-        container.innerHTML = '<p style="color:#64748b; font-style:italic;">No students are currently enrolled in any of your courses.</p>';
+        container.innerHTML = '<p style="color:#64748b; font-style:italic;">No students with a matching subject or existing enrollment are available.</p>';
         return;
       }
 
@@ -2670,6 +2770,104 @@
       `;
     } catch (err) {
       container.innerHTML = '<p style="color:#b91c1c;">Error loading student course management data.</p>';
+    }
+  }
+
+  async function loadTrainerCourseAccessRequests() {
+    const container = document.getElementById('trainer-course-access-requests');
+    try {
+      const response = await fetch('/trainer/course-access-requests', {
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to load course access requests.');
+      }
+
+      container.replaceChildren();
+      if (!data.requests || data.requests.length === 0) {
+        container.textContent = 'No pending course access requests.';
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%; min-width:520px; border-collapse:collapse; text-align:left; font-size:0.9rem;';
+      const header = table.createTHead().insertRow();
+      ['Student', 'Course', 'Decision'].forEach(label => {
+        const cell = document.createElement('th');
+        cell.textContent = label;
+        cell.style.cssText = 'padding:0.6rem 0.5rem; border-bottom:2px solid var(--border);';
+        header.appendChild(cell);
+      });
+
+      const body = table.createTBody();
+      data.requests.forEach(request => {
+        const row = body.insertRow();
+        const studentCell = row.insertCell();
+        const studentName = document.createElement('strong');
+        studentName.textContent = request.student_name;
+        studentCell.appendChild(studentName);
+        const email = document.createElement('div');
+        email.style.color = '#64748b';
+        email.textContent = request.student_email;
+        studentCell.appendChild(email);
+
+        row.insertCell().textContent = request.course_title;
+        const decisionCell = row.insertCell();
+        const approveButton = document.createElement('button');
+        approveButton.type = 'button';
+        approveButton.className = 'submit-btn';
+        approveButton.style.cssText = 'width:auto; padding:0.4rem 0.65rem; margin:0 0.35rem 0 0;';
+        approveButton.textContent = 'Approve';
+        approveButton.addEventListener('click', () => decideCourseAccessRequest(
+          request.id,
+          true,
+          approveButton,
+          rejectButton
+        ));
+        const rejectButton = document.createElement('button');
+        rejectButton.type = 'button';
+        rejectButton.className = 'profile-link-btn';
+        rejectButton.style.cssText = 'padding:0.4rem 0.65rem;';
+        rejectButton.textContent = 'Deny';
+        rejectButton.addEventListener('click', () => decideCourseAccessRequest(
+          request.id,
+          false,
+          approveButton,
+          rejectButton
+        ));
+        decisionCell.append(approveButton, rejectButton);
+      });
+      container.appendChild(table);
+    } catch (err) {
+      container.textContent = err.message || 'Could not load course access requests.';
+    }
+  }
+
+  async function decideCourseAccessRequest(requestId, approved, approveButton, rejectButton) {
+    approveButton.disabled = true;
+    rejectButton.disabled = true;
+    try {
+      const response = await fetch(
+        `/trainer/course-access-requests/${encodeURIComponent(requestId)}/decision`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ approved })
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not update the course access request.');
+      }
+      await renderTrainerDashboard();
+    } catch (err) {
+      approveButton.disabled = false;
+      rejectButton.disabled = false;
+      alert(err.message || 'Could not update the course access request.');
     }
   }
 

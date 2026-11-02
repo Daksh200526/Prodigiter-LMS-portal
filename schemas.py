@@ -36,6 +36,12 @@ class CourseCreate(BaseModel):
     description: Optional[str] = None
     modules: List[ModuleCreate] = Field(min_length=1)
 
+class CourseAccessDecision(BaseModel):
+    approved: bool
+
+class CourseAccessRequestCreate(BaseModel):
+    course_id: str
+
 class AssignmentEvaluation(BaseModel):
     progress_id: str
     is_approved: bool

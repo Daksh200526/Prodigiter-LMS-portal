@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 import uuid
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -38,6 +38,11 @@ class User(Base):
 
     courses_taught = relationship("Course", back_populates="trainer")
     enrollments = relationship("Enrollment", back_populates="student", cascade="all, delete-orphan")
+    course_access_requests = relationship(
+        "CourseAccessRequest",
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
     lesson_questions = relationship(
         "LessonQuestion",
         back_populates="student",
@@ -56,6 +61,11 @@ class Course(Base):
     trainer = relationship("User", back_populates="courses_taught")
     modules = relationship("Module", back_populates="course", cascade="all, delete-orphan", order_by="Module.order_index")
     enrollments = relationship("Enrollment", back_populates="course")
+    access_requests = relationship(
+        "CourseAccessRequest",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
 
 
 class Module(Base):
@@ -93,6 +103,23 @@ class Enrollment(Base):
     student = relationship("User", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
     progress_list = relationship("StudentProgress", back_populates="enrollment", cascade="all, delete-orphan")
+
+
+class CourseAccessRequest(Base):
+    __tablename__ = "course_access_requests"
+    __table_args__ = (
+        UniqueConstraint("student_id", "course_id", name="uq_course_access_request_student_course"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    student_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default="pending", nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    responded_at = Column(DateTime, nullable=True)
+
+    student = relationship("User", back_populates="course_access_requests")
+    course = relationship("Course", back_populates="access_requests")
 
 
 class StudentProgress(Base):
