@@ -27,6 +27,16 @@
       --link: #93c5fd;
       --link-background: #172554;
       --link-border: #1e3a8a;
+      --metric-bg: #1f2937;
+      --metric-pending-bg: #422006;
+      --badge-success-bg: #14532d;
+      --badge-success-text: #bbf7d0;
+      --badge-warning-bg: #713f12;
+      --badge-warning-text: #fef3c7;
+      --badge-neutral-bg: #374151;
+      --badge-neutral-text: #e5e7eb;
+      --badge-danger-bg: #7f1d1d;
+      --badge-danger-text: #fecaca;
       --border: #374151;
       --sidebar-w: 320px;
     }
@@ -46,6 +56,16 @@
       --link: #1d4ed8;
       --link-background: #eff6ff;
       --link-border: #bfdbfe;
+      --metric-bg: #eff6ff;
+      --metric-pending-bg: #fef3c7;
+      --badge-success-bg: #dcfce7;
+      --badge-success-text: #166534;
+      --badge-warning-bg: #fef3c7;
+      --badge-warning-text: #854d0e;
+      --badge-neutral-bg: #e2e8f0;
+      --badge-neutral-text: #334155;
+      --badge-danger-bg: #fee2e2;
+      --badge-danger-text: #991b1b;
       --border: #e2e8f0;
     }
     body {
@@ -83,6 +103,23 @@
     }
     .profile-link-btn:hover {
       background: var(--surface-hover);
+    }
+    .theme-toggle-btn {
+      display: inline-flex;
+      width: 2.4rem;
+      height: 2.4rem;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .theme-toggle-btn svg {
+      width: 1.25rem;
+      height: 1.25rem;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
     }
     .logout-btn {
       background: #fee2e2;
@@ -214,10 +251,20 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
-    .badge-success { background: #dcfce7; color: #166534; }
-    .badge-warning { background: #fef3c7; color: #854d0e; }
-    .badge-neutral { background: #e2e8f0; color: #334155; }
-    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-success { background: var(--badge-success-bg); color: var(--badge-success-text); }
+    .badge-warning { background: var(--badge-warning-bg); color: var(--badge-warning-text); }
+    .badge-neutral { background: var(--badge-neutral-bg); color: var(--badge-neutral-text); }
+    .badge-danger { background: var(--badge-danger-bg); color: var(--badge-danger-text); }
+    .admin-metric {
+      flex: 1;
+      padding: 1rem;
+      border-radius: 6px;
+      color: var(--text);
+      background: var(--metric-bg);
+    }
+    .admin-metric-pending {
+      background: var(--metric-pending-bg);
+    }
 
     /* Student Workspace Layout */
     .student-layout {
@@ -636,12 +683,15 @@
     }
     :root[data-theme="dark"] [style*="color: #64748b"],
     :root[data-theme="dark"] [style*="color:#64748b"],
+    :root[data-theme="dark"] [style*="color: rgb(100, 116, 139)"],
     :root[data-theme="dark"] [style*="color: #475569"],
-    :root[data-theme="dark"] [style*="color:#475569"] {
+    :root[data-theme="dark"] [style*="color:#475569"],
+    :root[data-theme="dark"] [style*="color: rgb(71, 85, 105)"] {
       color: var(--text-muted) !important;
     }
     :root[data-theme="dark"] [style*="color: #1e293b"],
-    :root[data-theme="dark"] [style*="color:#1e293b"] {
+    :root[data-theme="dark"] [style*="color:#1e293b"],
+    :root[data-theme="dark"] [style*="color: rgb(30, 41, 59)"] {
       color: var(--text) !important;
     }
     :root[data-theme="dark"] [style*="color:#b91c1c"],
@@ -705,7 +755,7 @@
 <header>
   <h2 style="margin: 0; font-size: 1.25rem;">Prodigiter</h2>
   <div class="nav-actions">
-    <button id="theme-toggle-btn" class="profile-link-btn" type="button" aria-label="Switch to light theme" onclick="toggleTheme()">Use light theme</button>
+    <button id="theme-toggle-btn" class="profile-link-btn theme-toggle-btn" type="button" aria-label="Switch to light theme" title="Switch to light theme" onclick="toggleTheme()"></button>
     <button id="profile-btn" class="profile-link-btn hidden" onclick="openProfileModal()">My Profile</button>
     <button id="logout-btn" class="logout-btn hidden" onclick="handleLogout()">Logout</button>
   </div>
@@ -1550,9 +1600,12 @@
     const theme = document.documentElement.dataset.theme;
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     const button = document.getElementById('theme-toggle-btn');
-    button.textContent = `Use ${nextTheme} theme`;
+    const icon = theme === 'dark'
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.463.402.807a6.5 6.5 0 0 0 8.268 8.268c.344-.215.829-.003.803.397z"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>';
+    button.innerHTML = icon;
     button.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
-    button.setAttribute('aria-pressed', String(theme === 'light'));
+    button.setAttribute('title', `Switch to ${nextTheme} theme`);
   }
 
   function toggleTheme() {
@@ -2283,15 +2336,13 @@
     const metricsContainer = document.getElementById('admin-metrics');
     metricsContainer.replaceChildren();
     [
-      ['Trainers', metrics.total_trainers, '#eff6ff'],
-      ['Students', metrics.total_students, '#eff6ff'],
-      ['Pending Clearance', metrics.pending_student_access_approvals, '#fef3c7']
-    ].forEach(([label, count, background]) => {
+      ['Trainers', metrics.total_trainers, false],
+      ['Students', metrics.total_students, false],
+      ['Pending Clearance', metrics.pending_student_access_approvals, true]
+    ].forEach(([label, count, isPending]) => {
       const metric = document.createElement('div');
-      metric.style.background = background;
-      metric.style.padding = '1rem';
-      metric.style.borderRadius = '6px';
-      metric.style.flex = '1';
+      metric.classList.add('admin-metric');
+      if (isPending) metric.classList.add('admin-metric-pending');
       metric.append(document.createTextNode(`${label}: `));
       const value = document.createElement('strong');
       value.textContent = count;
