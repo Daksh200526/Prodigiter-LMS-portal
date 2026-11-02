@@ -1445,7 +1445,6 @@ class TestLMSAPI(unittest.TestCase):
                         "order_index": 2,
                         "title": "Second lesson",
                         "video_url": "https://example.com/lesson-2.mp4",
-                        "assignment_prompt": "Complete the next exercise",
                         "assignment_link": None,
                     },
                     {
@@ -1512,6 +1511,11 @@ class TestLMSAPI(unittest.TestCase):
                 },
                 headers=headers,
             )
+            self.assertEqual(forbidden_response.status_code, 403)
+            self.assertEqual(
+                forbidden_response.json()["detail"],
+                "Only trainer accounts can create courses.",
+            )
             added_lesson_response = self.client.post(
                 f"/trainer/courses/{course.id}/modules",
                 json={
@@ -1520,6 +1524,15 @@ class TestLMSAPI(unittest.TestCase):
                     "video_url": "https://example.com/lesson-3.mp4",
                     "assignment_prompt": "Complete the final exercise",
                     "assignment_link": "https://example.com/final-exercise",
+                },
+                headers=headers,
+            )
+            added_lesson_without_prompt = self.client.post(
+                f"/trainer/courses/{course.id}/modules",
+                json={
+                    "order_index": 4,
+                    "title": "Fourth lesson",
+                    "video_url": "https://example.com/lesson-4.mp4",
                 },
                 headers=headers,
             )
@@ -1564,12 +1577,14 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(course.trainer_id, trainer_id)
             self.assertEqual(
                 [module.order_index for module in course.modules],
-                [1, 2, 3],
+                [1, 2, 3, 4],
             )
+            self.assertEqual(course.modules[3].assignment_prompt, "")
             self.assertEqual(
                 course.modules[0].assignment_link,
                 "https://example.com/exercise",
             )
+            self.assertEqual(course.modules[1].assignment_prompt, "")
             self.assertEqual(dashboard_response.status_code, 200)
             dashboard_course = next(
                 item for item in dashboard_response.json()["courses"]
@@ -1583,15 +1598,15 @@ class TestLMSAPI(unittest.TestCase):
             )
             self.assertEqual(course_student["progress_percent"], 50)
             self.assertEqual(course_student["completed_slots"], 1)
-            self.assertEqual(forbidden_response.status_code, 403)
             self.assertEqual(duplicate_order_response.status_code, 422)
             self.assertEqual(added_lesson_response.status_code, 201)
+            self.assertEqual(added_lesson_without_prompt.status_code, 201)
             self.assertEqual(added_lesson_response.json()["order_index"], 3)
             self.assertEqual(invalid_order_response.status_code, 422)
             self.assertEqual(unauthorized_course_response.status_code, 404)
             self.assertEqual(
                 db.query(main.models.Module).filter_by(course_id=course.id).count(),
-                3,
+                4,
             )
         finally:
             db.close()

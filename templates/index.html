@@ -3189,7 +3189,7 @@
     const fields = [
       ['Lesson title', 'lesson-title', 'text', true],
       ['Video URL', 'lesson-video-url', 'url', true],
-      ['Assignment prompt', 'lesson-assignment-prompt', 'textarea', true],
+      ['Assignment prompt (optional)', 'lesson-assignment-prompt', 'textarea', false],
       ['Assignment link', 'lesson-assignment-link', 'url', false],
     ];
     fields.forEach(([labelText, className, type, required]) => {
@@ -3280,7 +3280,7 @@
       order_index: (course.modules || []).length + 1,
       title: lesson.querySelector('.lesson-title').value.trim(),
       video_url: lesson.querySelector('.lesson-video-url').value.trim(),
-      assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim(),
+      assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim() || null,
       assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
     };
     const token = localStorage.getItem('jwt_token');
@@ -3295,7 +3295,9 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        alert(data.detail || 'Could not add the lesson.');
+        alert(response.status === 403
+          ? 'This action requires a trainer account. Sign out and sign in with your trainer account.'
+          : data.detail || 'Could not add the lesson.');
         return;
       }
       closeTrainerModal('trainer-lesson-modal');
@@ -3315,7 +3317,7 @@
         order_index: index + 1,
         title: lesson.querySelector('.lesson-title').value.trim(),
         video_url: lesson.querySelector('.lesson-video-url').value.trim(),
-        assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim(),
+        assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim() || null,
         assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
       })),
     };
@@ -3331,7 +3333,9 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        alert(data.detail || 'Could not create course.');
+        alert(response.status === 403
+          ? 'This action requires a trainer account. Sign out and sign in with your trainer account.'
+          : data.detail || 'Could not create course.');
         return;
       }
       document.getElementById('trainer-course-form').reset();

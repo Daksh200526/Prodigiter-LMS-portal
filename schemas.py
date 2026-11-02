@@ -27,7 +27,7 @@ class ModuleCreate(BaseModel):
     order_index: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=255)
     video_url: str = Field(min_length=1, max_length=500)
-    assignment_prompt: str = Field(min_length=1)
+    assignment_prompt: Optional[str] = None
     assignment_link: Optional[str] = Field(default=None, max_length=500)
 
 class CourseCreate(BaseModel):

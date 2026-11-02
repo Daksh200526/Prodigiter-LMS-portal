@@ -1334,8 +1334,11 @@ def trainer_dashboard(
 def create_trainer_course(
     payload: schemas.CourseCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role("trainer")),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
+    if current_user.role != "trainer":
+        raise HTTPException(status_code=403, detail="Only trainer accounts can create courses.")
+
     order_indexes = [module.order_index for module in payload.modules]
     if len(order_indexes) != len(set(order_indexes)):
         raise HTTPException(status_code=422, detail="Lesson order numbers must be unique.")
@@ -1354,11 +1357,10 @@ def create_trainer_course(
     for module_payload in sorted(payload.modules, key=lambda module: module.order_index):
         module_title = module_payload.title.strip()
         video_url = module_payload.video_url.strip()
-        assignment_prompt = module_payload.assignment_prompt.strip()
-        if not module_title or not video_url or not assignment_prompt:
+        if not module_title or not video_url:
             raise HTTPException(
                 status_code=422,
-                detail="Lesson title, video URL, and assignment prompt cannot be empty.",
+                detail="Lesson title and video URL cannot be empty.",
             )
         db.add(models.Module(
             id=str(uuid.uuid4()),
@@ -1366,7 +1368,7 @@ def create_trainer_course(
             order_index=module_payload.order_index,
             title=module_title,
             video_url=video_url,
-            assignment_prompt=assignment_prompt,
+            assignment_prompt=(module_payload.assignment_prompt or "").strip(),
             assignment_link=module_payload.assignment_link.strip()
                 if module_payload.assignment_link else None,
         ))
@@ -1385,8 +1387,11 @@ def add_trainer_course_module(
     course_id: str,
     payload: schemas.ModuleCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role("trainer")),
+    current_user: models.User = Depends(auth.get_current_user),
 ):
+    if current_user.role != "trainer":
+        raise HTTPException(status_code=403, detail="Only trainer accounts can add lessons.")
+
     course = db.query(models.Course).filter_by(
         id=course_id,
         trainer_id=current_user.id,
@@ -1406,11 +1411,10 @@ def add_trainer_course_module(
 
     title = payload.title.strip()
     video_url = payload.video_url.strip()
-    assignment_prompt = payload.assignment_prompt.strip()
-    if not title or not video_url or not assignment_prompt:
+    if not title or not video_url:
         raise HTTPException(
             status_code=422,
-            detail="Lesson title, video URL, and assignment prompt cannot be empty.",
+            detail="Lesson title and video URL cannot be empty.",
         )
 
     module = models.Module(
@@ -1419,7 +1423,7 @@ def add_trainer_course_module(
         order_index=next_order_index,
         title=title,
         video_url=video_url,
-        assignment_prompt=assignment_prompt,
+        assignment_prompt=(payload.assignment_prompt or "").strip(),
         assignment_link=payload.assignment_link.strip() if payload.assignment_link else None,
     )
     db.add(module)
