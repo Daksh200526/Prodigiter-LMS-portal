@@ -4,24 +4,59 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Prodigiter LMS Portal</title>
+  <script>
+    const savedTheme = localStorage.getItem('lms_theme');
+    document.documentElement.dataset.theme = savedTheme === 'light' ? 'light' : 'dark';
+  </script>
   <style>
     :root {
+      color-scheme: dark;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
+      --bg: #0b1120;
+      --card: #111827;
+      --surface: #1f2937;
+      --surface-muted: #172033;
+      --surface-hover: #273449;
+      --text: #e5e7eb;
+      --text-muted: #9ca3af;
+      --text-secondary: #cbd5e1;
+      --field: #111827;
+      --field-text: #f9fafb;
+      --accent-soft: #172554;
+      --link: #93c5fd;
+      --link-background: #172554;
+      --link-border: #1e3a8a;
+      --border: #374151;
+      --sidebar-w: 320px;
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
       --bg: #f8fafc;
       --card: #ffffff;
+      --surface: #ffffff;
+      --surface-muted: #f8fafc;
+      --surface-hover: #f1f5f9;
       --text: #0f172a;
+      --text-muted: #64748b;
+      --text-secondary: #475569;
+      --field: #ffffff;
+      --field-text: #0f172a;
+      --accent-soft: #eff6ff;
+      --link: #1d4ed8;
+      --link-background: #eff6ff;
+      --link-border: #bfdbfe;
       --border: #e2e8f0;
-      --sidebar-w: 320px;
     }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
     header {
-      background: #ffffff;
+      background: var(--card);
       border-bottom: 1px solid var(--border);
       padding: 0.85rem 2rem;
       display: flex;
@@ -37,8 +72,8 @@
       gap: 1rem;
     }
     .profile-link-btn {
-      background: #f1f5f9;
-      color: #1e293b;
+      background: var(--surface-muted);
+      color: var(--text);
       border: 1px solid var(--border);
       padding: 0.45rem 0.9rem;
       border-radius: 6px;
@@ -47,7 +82,7 @@
       font-size: 0.9rem;
     }
     .profile-link-btn:hover {
-      background: #e2e8f0;
+      background: var(--surface-hover);
     }
     .logout-btn {
       background: #fee2e2;
@@ -102,12 +137,12 @@
       padding: 0.5rem 0.8rem;
       font-weight: 600;
       cursor: pointer;
-      color: #64748b;
+      color: var(--text-muted);
       border-radius: 4px;
       font-size: 0.9rem;
     }
     .tab-btn.active {
-      background: #eff6ff;
+      background: var(--accent-soft);
       color: var(--primary);
     }
     .form-group {
@@ -119,13 +154,21 @@
       font-weight: 500;
       font-size: 0.9rem;
     }
-    input, select {
+    input, select, textarea {
       width: 100%;
       padding: 0.6rem;
       box-sizing: border-box;
       border: 1px solid var(--border);
       border-radius: 4px;
       font-size: 1rem;
+      background: var(--field);
+      color: var(--field-text);
+    }
+    input::placeholder, textarea::placeholder {
+      color: var(--text-muted);
+    }
+    button {
+      color: inherit;
     }
     button.submit-btn {
       width: 100%;
@@ -150,7 +193,7 @@
       text-align: center;
       margin-top: 1.5rem;
       font-size: 0.92rem;
-      color: #64748b;
+      color: var(--text-muted);
     }
     .bottom-switch-link a {
       color: var(--primary);
@@ -184,7 +227,7 @@
     }
     .lessons-sidebar {
       width: var(--sidebar-w);
-      background: #ffffff;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 8px;
       overflow: hidden;
@@ -192,7 +235,7 @@
     }
     .sidebar-header {
       padding: 1rem;
-      background: #f8fafc;
+      background: var(--surface-muted);
       border-bottom: 1px solid var(--border);
       font-weight: bold;
     }
@@ -203,20 +246,20 @@
       transition: background 0.15s;
     }
     .lesson-item:hover {
-      background: #f1f5f9;
+      background: var(--surface-hover);
     }
     .lesson-item.active {
-      background: #eff6ff;
+      background: var(--accent-soft);
       border-left: 4px solid var(--primary);
     }
     .lesson-item.locked {
       opacity: 0.65;
       cursor: not-allowed;
-      background: #fafafa;
+      background: var(--surface-muted);
     }
     .video-workspace {
       flex: 1;
-      background: #ffffff;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1.5rem;
@@ -239,7 +282,7 @@
       border: none;
     }
     .assignment-card {
-      background: #f8fafc;
+      background: var(--surface-muted);
       border: 1px solid var(--border);
       border-radius: 6px;
       padding: 1.25rem;
@@ -257,14 +300,14 @@
       border-bottom: 3px solid transparent;
       margin-bottom: -1px;
       background: transparent;
-      color: #64748b;
+      color: var(--text-muted);
       font: inherit;
       font-weight: 600;
       cursor: pointer;
     }
     .lesson-community-tab.active {
       border-bottom-color: var(--text);
-      color: #1e293b;
+      color: var(--text);
     }
     .lesson-community-tab:focus-visible {
       outline: 2px solid var(--primary);
@@ -277,7 +320,7 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: #ffffff;
+      background: var(--card);
       border: 1px solid var(--border);
       padding: 0.65rem 1rem;
       border-radius: 6px;
@@ -288,7 +331,7 @@
       margin-bottom: 1rem;
     }
     .assignment-link-btn:hover {
-      background: #eff6ff;
+      background: var(--accent-soft);
     }
 
     /* Modal Backdrop */
@@ -305,7 +348,7 @@
       z-index: 100;
     }
     .modal-box {
-      background: white;
+      background: var(--card);
       border-radius: 8px;
       width: 100%;
       max-width: 460px;
@@ -320,7 +363,7 @@
       border: none;
       font-size: 1.25rem;
       cursor: pointer;
-      color: #64748b;
+      color: var(--text-muted);
     }
     .trainer-layout {
       display: grid;
@@ -335,7 +378,7 @@
     .trainer-pending-section {
       margin-top: 1.25rem;
       padding: 1.25rem;
-      background: #f8fafc;
+      background: var(--surface-muted);
       border: 1px solid var(--border);
       border-radius: 8px;
     }
@@ -352,7 +395,7 @@
     }
     .trainer-course-summary {
       margin: 0.5rem 0 1.25rem;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: 0.9rem;
     }
     .trainer-lessons {
@@ -362,7 +405,7 @@
     .trainer-lesson-card,
     .trainer-question-card {
       padding: 1rem;
-      background: #fff;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 8px;
     }
@@ -379,7 +422,7 @@
     }
     .trainer-lesson-prompt {
       margin: 0.75rem 0;
-      color: #475569;
+      color: var(--text-secondary);
       white-space: pre-wrap;
     }
     .trainer-resource-link {
@@ -387,15 +430,15 @@
       align-items: center;
       margin-top: 0.75rem;
       padding: 0.55rem 0.8rem;
-      border: 1px solid #bfdbfe;
+      border: 1px solid var(--link-border);
       border-radius: 6px;
-      background: #eff6ff;
-      color: #1d4ed8;
+      background: var(--link-background);
+      color: var(--link);
       font-weight: 650;
       text-decoration: none;
     }
     .trainer-resource-link:hover {
-      background: #dbeafe;
+      background: var(--surface-hover);
     }
     .trainer-lesson-questions {
       display: grid;
@@ -406,7 +449,7 @@
     }
     .trainer-lesson-questions h6 {
       margin: 0;
-      color: #475569;
+      color: var(--text-secondary);
       font-size: 0.85rem;
     }
     .trainer-question-card p {
@@ -418,7 +461,7 @@
       min-height: 4rem;
       box-sizing: border-box;
       padding: 0.65rem;
-      border: 1px solid #cbd5e1;
+      border: 1px solid var(--border);
       border-radius: 6px;
       font: inherit;
       resize: vertical;
@@ -440,13 +483,13 @@
     }
     .trainer-pending-table th {
       padding: 0.5rem;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: 0.8rem;
       white-space: nowrap;
     }
     .trainer-pending-table td {
       padding: 0.65rem 0.5rem;
-      background: #fff;
+      background: var(--card);
       border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
       vertical-align: top;
@@ -468,7 +511,7 @@
       min-height: 3.5rem;
       box-sizing: border-box;
       padding: 0.55rem;
-      border: 1px solid #cbd5e1;
+      border: 1px solid var(--border);
       border-radius: 6px;
       font: inherit;
       resize: vertical;
@@ -520,14 +563,14 @@
     }
     .student-table th {
       padding: 0.65rem 0.75rem;
-      color: #64748b;
+      color: var(--text-muted);
       font-size: 0.82rem;
       font-weight: 600;
       white-space: nowrap;
     }
     .student-table td {
       padding: 0.75rem;
-      background: #fff;
+      background: var(--card);
       vertical-align: middle;
     }
     .student-table td:first-child {
@@ -570,7 +613,7 @@
       cursor: not-allowed;
     }
     .student-delete-form-cell {
-      background: #f8fafc !important;
+      background: var(--surface-muted) !important;
       border-radius: 8px;
     }
     .student-delete-reason {
@@ -578,6 +621,36 @@
       min-height: 4rem;
       box-sizing: border-box;
       margin: 0.5rem 0;
+    }
+    :root[data-theme="dark"] [style*="background: #ffffff"],
+    :root[data-theme="dark"] [style*="background:#ffffff"],
+    :root[data-theme="dark"] [style*="background: #fff"],
+    :root[data-theme="dark"] [style*="background:#fff"] {
+      background: var(--card) !important;
+    }
+    :root[data-theme="dark"] [style*="background: #f8fafc"],
+    :root[data-theme="dark"] [style*="background:#f8fafc"],
+    :root[data-theme="dark"] [style*="background: #f1f5f9"],
+    :root[data-theme="dark"] [style*="background:#f1f5f9"] {
+      background: var(--surface-muted) !important;
+    }
+    :root[data-theme="dark"] [style*="color: #64748b"],
+    :root[data-theme="dark"] [style*="color:#64748b"],
+    :root[data-theme="dark"] [style*="color: #475569"],
+    :root[data-theme="dark"] [style*="color:#475569"] {
+      color: var(--text-muted) !important;
+    }
+    :root[data-theme="dark"] [style*="color: #1e293b"],
+    :root[data-theme="dark"] [style*="color:#1e293b"] {
+      color: var(--text) !important;
+    }
+    :root[data-theme="dark"] [style*="color:#b91c1c"],
+    :root[data-theme="dark"] [style*="color: #b91c1c"] {
+      color: #fca5a5 !important;
+    }
+    :root[data-theme="dark"] [style*="color:#b45309"],
+    :root[data-theme="dark"] [style*="color: #b45309"] {
+      color: #fbbf24 !important;
     }
     @media (max-width: 760px) {
       .trainer-layout {
@@ -602,6 +675,18 @@
       }
     }
     @media (max-width: 480px) {
+      header {
+        padding: 0.75rem 1rem;
+      }
+      .nav-actions {
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .nav-actions button {
+        padding: 0.4rem 0.55rem;
+        font-size: 0.8rem;
+      }
       .trainer-course-card,
       .trainer-pending-section {
         padding: 1rem;
@@ -620,6 +705,7 @@
 <header>
   <h2 style="margin: 0; font-size: 1.25rem;">Prodigiter</h2>
   <div class="nav-actions">
+    <button id="theme-toggle-btn" class="profile-link-btn" type="button" aria-label="Switch to light theme" onclick="toggleTheme()">Use light theme</button>
     <button id="profile-btn" class="profile-link-btn hidden" onclick="openProfileModal()">My Profile</button>
     <button id="logout-btn" class="logout-btn hidden" onclick="handleLogout()">Logout</button>
   </div>
@@ -1220,6 +1306,7 @@
   }
 
   window.addEventListener('DOMContentLoaded', () => {
+    updateThemeToggle();
     switchLoginRole('admin');
     setTimeout(hardClearInputs, 50);
     setTimeout(hardClearInputs, 200);
@@ -1453,9 +1540,26 @@
   }
 
   function handleLogout() {
-    localStorage.clear();
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('user_role');
     sessionStorage.clear();
     location.reload();
+  }
+
+  function updateThemeToggle() {
+    const theme = document.documentElement.dataset.theme;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    const button = document.getElementById('theme-toggle-btn');
+    button.textContent = `Use ${nextTheme} theme`;
+    button.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+    button.setAttribute('aria-pressed', String(theme === 'light'));
+  }
+
+  function toggleTheme() {
+    const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    localStorage.setItem('lms_theme', nextTheme);
+    updateThemeToggle();
   }
 
   async function openProfileModal() {
