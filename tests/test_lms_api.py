@@ -415,7 +415,7 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
-    def test_course_subject_registration_filters_student_and_trainer_content(self):
+    def test_students_enroll_in_courses_without_trainer_subject_link(self):
         db = self.testing_session_local()
         web_trainer_id = str(uuid.uuid4())
         python_trainer_id = str(uuid.uuid4())
@@ -453,18 +453,10 @@ class TestLMSAPI(unittest.TestCase):
                 "phone_number": f"9{uuid.uuid4().int % 1000000000:09d}",
                 "password": "StrongPass123!",
             }
-            invalid_registration = self.client.post(
-                "/auth/register-student",
-                json={**registration_data, "course_subject": "Unlisted Subject"},
-            )
             web_registration = self.client.post(
                 "/auth/register-student",
-                json={
-                    **registration_data,
-                    "course_subject": "Web Development",
-                },
+                json=registration_data,
             )
-            self.assertEqual(invalid_registration.status_code, 422)
             self.assertEqual(web_registration.status_code, 200)
             web_student_id = web_registration.json()["user_id"]
 
@@ -504,7 +496,6 @@ class TestLMSAPI(unittest.TestCase):
                     "name": "Python Student",
                     "email": f"{uuid.uuid4()}@example.com",
                     "phone_number": f"9{uuid.uuid4().int % 1000000000:09d}",
-                    "course_subject": "Python Programming",
                 },
             )
             self.assertEqual(python_registration.status_code, 200)
@@ -540,10 +531,22 @@ class TestLMSAPI(unittest.TestCase):
                 course["title"] for course in web_catalog.json()["courses"]
             ]
             self.assertIn("Subject Course", web_catalog_titles)
-            self.assertNotIn("Python Subject Course", web_catalog_titles)
+            self.assertIn("Python Subject Course", web_catalog_titles)
+            self.assertIsNone(web_student.course_subject)
+            web_dashboard_before_request = self.client.get(
+                "/student/dashboard",
+                headers=web_student_headers,
+            )
+            self.assertEqual(web_dashboard_before_request.status_code, 200)
+            self.assertEqual(web_dashboard_before_request.json()["courses"], [])
             web_request = self.client.post(
                 "/student/course-access-requests",
                 json={"course_id": web_course_id},
+                headers=web_student_headers,
+            )
+            web_cross_course_request = self.client.post(
+                "/student/course-access-requests",
+                json={"course_id": python_course_id},
                 headers=web_student_headers,
             )
             python_request = self.client.post(
@@ -552,6 +555,11 @@ class TestLMSAPI(unittest.TestCase):
                 headers=python_student_headers,
             )
             self.assertEqual(web_request.status_code, 201, web_request.text)
+            self.assertEqual(
+                web_cross_course_request.status_code,
+                201,
+                web_cross_course_request.text,
+            )
             self.assertEqual(python_request.status_code, 201, python_request.text)
             wrong_trainer_decision = self.client.post(
                 f"/trainer/course-access-requests/{web_request.json()['request_id']}/decision",
@@ -593,8 +601,18 @@ class TestLMSAPI(unittest.TestCase):
                 json={"approved": True},
                 headers=python_headers,
             )
+            web_cross_course_decision = self.client.post(
+                f"/trainer/course-access-requests/{web_cross_course_request.json()['request_id']}/decision",
+                json={"approved": True},
+                headers=python_headers,
+            )
             self.assertEqual(web_decision.status_code, 200, web_decision.text)
             self.assertEqual(python_decision.status_code, 200, python_decision.text)
+            self.assertEqual(
+                web_cross_course_decision.status_code,
+                200,
+                web_cross_course_decision.text,
+            )
 
             python_course = db.query(main.models.Course).filter_by(
                 id=python_course_id,
@@ -607,13 +625,10 @@ class TestLMSAPI(unittest.TestCase):
                 student_id=python_student_id,
                 course_id=python_course_id,
             ).one()
-            foreign_enrollment = main.models.Enrollment(
-                id=str(uuid.uuid4()),
+            web_cross_enrollment = db.query(main.models.Enrollment).filter_by(
                 student_id=web_student_id,
                 course_id=python_course_id,
-            )
-            db.add(foreign_enrollment)
-            db.commit()
+            ).one()
 
             web_dashboard = self.client.get(
                 "/student/dashboard",
@@ -628,8 +643,8 @@ class TestLMSAPI(unittest.TestCase):
                 "/trainer/dashboard",
                 headers=python_headers,
             )
-            mismatched_completion = self.client.post(
-                f"/student/complete-video/{foreign_enrollment.id}/{python_course.modules[0].id}",
+            cross_course_completion = self.client.post(
+                f"/student/complete-video/{web_cross_enrollment.id}/{python_course.modules[0].id}",
                 headers={"Authorization": f"Bearer {web_registration.json()['access_token']}"},
             )
 
@@ -642,7 +657,7 @@ class TestLMSAPI(unittest.TestCase):
                 course["course_title"] for course in python_dashboard.json()["courses"]
             ]
             self.assertIn("Subject Course", web_course_titles)
-            self.assertNotIn("Python Subject Course", web_course_titles)
+            self.assertIn("Python Subject Course", web_course_titles)
             self.assertEqual(python_course_titles, ["Python Subject Course"])
             web_trainer_student_ids = [
                 student["student_id"]
@@ -651,12 +666,14 @@ class TestLMSAPI(unittest.TestCase):
             ]
             self.assertIn(web_student_id, web_trainer_student_ids)
             self.assertNotIn(python_student_id, web_trainer_student_ids)
-            self.assertEqual(
-                [student["student_id"] for course in python_trainer_dashboard.json()["courses"]
-                 for student in course["students"]],
-                [python_student_id],
-            )
-            self.assertEqual(mismatched_completion.status_code, 403)
+            python_trainer_student_ids = [
+                student["student_id"]
+                for course in python_trainer_dashboard.json()["courses"]
+                for student in course["students"]
+            ]
+            self.assertIn(web_student_id, python_trainer_student_ids)
+            self.assertIn(python_student_id, python_trainer_student_ids)
+            self.assertEqual(cross_course_completion.status_code, 200)
             self.assertIsNotNone(web_enrollment)
             self.assertIsNotNone(python_enrollment)
         finally:
@@ -669,7 +686,7 @@ class TestLMSAPI(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    def test_trainer_can_directly_assign_a_course_to_a_matching_new_student(self):
+    def test_trainer_can_directly_assign_a_course_to_any_new_student(self):
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
@@ -687,7 +704,7 @@ class TestLMSAPI(unittest.TestCase):
                 name="New Cloud Student",
                 email=f"{student_id}@example.com",
                 role="student",
-                course_subject="Cloud Computing",
+                course_subject="Data Science",
                 is_access_granted=True,
             )
             course = main.models.Course(

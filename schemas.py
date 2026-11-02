@@ -10,7 +10,6 @@ class StudentRegister(BaseModel):
     email: EmailStr
     phone_number: str
     password: str
-    course_subject: str
 
 class OTPRequest(BaseModel):
     phone_number: str

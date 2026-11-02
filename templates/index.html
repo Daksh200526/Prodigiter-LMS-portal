@@ -725,17 +725,6 @@
           <input type="email" id="reg-email" placeholder="student@example.com" autocomplete="off">
         </div>
         <div class="form-group">
-          <label for="reg-course-subject">Choose your initial course</label>
-          <select id="reg-course-subject" required>
-            <option value="">Select a course</option>
-            <option value="Web Development">Web Development</option>
-            <option value="Python Programming">Python Programming</option>
-            <option value="Data Science">Data Science</option>
-            <option value="Java Programming">Java Programming</option>
-            <option value="Cloud Computing">Cloud Computing</option>
-          </select>
-        </div>
-        <div class="form-group">
           <label>Mobile Number (10 digits)</label>
           <input type="text" id="reg-phone" placeholder="9876543210" autocomplete="off">
         </div>
@@ -759,7 +748,10 @@
     <!-- Left Sidebar: Course catalog and lessons -->
     <div class="lessons-sidebar">
       <section style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);">
-        <h3 style="margin: 0 0 0.5rem;">Courses for you</h3>
+        <h3 style="margin: 0 0 0.5rem;">Course catalog</h3>
+        <p style="margin:0 0 0.5rem; color:#64748b; font-size:0.85rem;">
+          Courses here are not assigned yet. Request access and wait for trainer approval.
+        </p>
         <div id="student-course-catalog">Loading courses...</div>
       </section>
       <div class="sidebar-header" id="course-title-header">Course Modules</div>
@@ -876,9 +868,9 @@
     
     <!-- Course Assignment Section for Students under Trainer -->
     <div class="card" style="margin-bottom: 1.5rem; background: #ffffff; border-color: #cbd5e1;">
-      <h4 style="margin-top: 0; margin-bottom: 0.35rem;">Course Assignment (Students Under Your Instruction)</h4>
+      <h4 style="margin-top: 0; margin-bottom: 0.35rem;">Course Assignment</h4>
       <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 1rem;">
-        Review course access requests or assign a course directly to a student whose subject matches your specialization.
+        Review requests for your courses or directly assign one of your courses to any student.
       </p>
       <h5 style="margin: 0.75rem 0;">Course access requests</h5>
       <div id="trainer-course-access-requests" style="margin-bottom: 1.25rem;">
@@ -886,7 +878,7 @@
       </div>
       <h5 style="margin: 0.75rem 0;">Assign a course directly</h5>
       <div id="trainer-assign-students-container" style="overflow-x: auto;">
-        Loading eligible students...
+        Loading students...
       </div>
     </div>
 
@@ -1079,8 +1071,6 @@
     addRow('Phone Number', profile.phone_number || 'Not registered');
     if (profile.role === 'trainer' || profile.role === 'admin') {
       addRow('Specialization', profile.specialization || 'Not specified');
-    } else {
-      addRow('Selected Course', profile.course_subject || 'Not selected');
     }
     if (!profile.phone_number && (profile.role === 'student' || profile.role === 'trainer')) {
       renderRecoveryPhoneSetup(details);
@@ -1200,7 +1190,7 @@
     document.getElementById('login-container').classList.add('hidden');
     document.getElementById('forgot-password-container').classList.add('hidden');
     document.getElementById('register-container').classList.remove('hidden');
-    ['reg-name', 'reg-email', 'reg-phone', 'reg-password', 'reg-course-subject'].forEach(id => {
+    ['reg-name', 'reg-email', 'reg-phone', 'reg-password'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -1268,10 +1258,9 @@
     const email = document.getElementById('reg-email').value.trim();
     const phone_number = document.getElementById('reg-phone').value.trim();
     const password = document.getElementById('reg-password').value;
-    const course_subject = document.getElementById('reg-course-subject').value;
 
-    if (!name || !email || !phone_number || !password || !course_subject) {
-      alert("Please fill in all fields and choose a course.");
+    if (!name || !email || !phone_number || !password) {
+      alert("Please fill in all fields.");
       return;
     }
 
@@ -1279,7 +1268,7 @@
       const res = await fetch('/auth/register-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone_number, password, course_subject })
+        body: JSON.stringify({ name, email, phone_number, password })
       });
 
       const data = await res.json();
@@ -1623,7 +1612,7 @@
 
     container.replaceChildren();
     if (!data.courses || data.courses.length === 0) {
-      container.textContent = 'No courses currently match your selected subject.';
+      container.textContent = 'No courses are available yet.';
       return;
     }
 
@@ -1657,10 +1646,15 @@
         pending.textContent = 'Request pending';
         card.appendChild(pending);
       } else {
+        const available = document.createElement('span');
+        available.className = 'badge badge-neutral';
+        available.textContent = 'Not enrolled';
+        card.appendChild(available);
+
         const requestButton = document.createElement('button');
         requestButton.type = 'button';
         requestButton.className = 'profile-link-btn';
-        requestButton.style.cssText = 'font-size:0.85rem; padding:0.4rem 0.65rem;';
+        requestButton.style.cssText = 'display:block; font-size:0.85rem; padding:0.4rem 0.65rem; margin-top:0.45rem;';
         requestButton.textContent = course.status === 'rejected'
           ? 'Request access again'
           : 'Request access';
@@ -2721,7 +2715,7 @@
       }
 
       if (!data.students || data.students.length === 0) {
-        container.innerHTML = '<p style="color:#64748b; font-style:italic;">No students with a matching subject or existing enrollment are available.</p>';
+        container.innerHTML = '<p style="color:#64748b; font-style:italic;">No student accounts are available.</p>';
         return;
       }
 
@@ -2762,7 +2756,7 @@
               <th style="padding:0.6rem 0.5rem;">Student Name</th>
               <th style="padding:0.6rem 0.5rem;">Phone</th>
               <th style="padding:0.6rem 0.5rem;">Enrolled Courses</th>
-              <th style="padding:0.6rem 0.5rem;">Assign Additional Course</th>
+              <th style="padding:0.6rem 0.5rem;">Assign Course</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
