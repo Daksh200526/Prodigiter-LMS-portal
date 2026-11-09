@@ -287,22 +287,93 @@
       font-weight: bold;
     }
     .lesson-item {
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid var(--border);
       cursor: pointer;
       transition: background 0.15s;
+    }
+    #lessons-list,
+    .day-one-website-tabs,
+    .day-one-question-tabs {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding: 0.15rem 0.15rem 0.75rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: thin;
+    }
+    #lessons-list .lesson-item,
+    .day-one-step-tab {
+      flex: 0 0 auto;
+      min-width: 7rem;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-muted);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
     }
     .lesson-item:hover {
       background: var(--surface-hover);
     }
     .lesson-item.active {
       background: var(--accent-soft);
-      border-left: 4px solid var(--primary);
+      border-color: var(--primary);
     }
     .lesson-item.locked {
       opacity: 0.65;
       cursor: not-allowed;
       background: var(--surface-muted);
+    }
+    .day-one-step-tab {
+      min-width: 3rem;
+      text-align: center;
+      cursor: pointer;
+    }
+    .day-one-website-tab {
+      min-width: 9rem;
+      text-align: left;
+      cursor: pointer;
+    }
+    .day-one-step-tab.active {
+      border-color: var(--primary);
+      background: var(--accent-soft);
+    }
+    .day-one-step-tab:disabled,
+    .day-one-website-tab:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .day-one-panel {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+    .day-one-site-link {
+      display: inline-flex;
+      margin: 0.35rem 0 1rem;
+      padding: 0.6rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--link);
+      font-weight: 600;
+    }
+    .day-one-answer-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      margin: 1rem 0;
+    }
+    .day-one-answer-options label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .day-one-notice {
+      color: var(--text-muted);
+      line-height: 1.5;
     }
     .video-workspace {
       flex: 1;
@@ -310,46 +381,6 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 1.5rem;
-    }
-    .internship-planner {
-      margin-bottom: 1.5rem;
-    }
-    .internship-planner h2 {
-      margin: 0 0 0.35rem;
-      font-size: 1.4rem;
-    }
-    .internship-planner-intro {
-      margin: 0 0 1rem;
-      color: var(--text-muted);
-    }
-    .internship-planner-list {
-      display: grid;
-      gap: 0.65rem;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .internship-planner-day {
-      display: grid;
-      grid-template-columns: 5rem minmax(0, 1fr);
-      gap: 1rem;
-      align-items: start;
-      padding: 0.85rem 1rem;
-      background: var(--surface-muted);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-    }
-    .internship-planner-day-label {
-      color: var(--link);
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .internship-planner-day p {
-      margin: 0;
-      line-height: 1.5;
-    }
-    .internship-planner-day p + p {
-      margin-top: 0.35rem;
     }
     .video-container {
       position: relative;
@@ -402,23 +433,6 @@
     }
     .lesson-community-panel {
       min-width: 0;
-    }
-    .assignment-link-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      padding: 0.65rem 1rem;
-      border-radius: 6px;
-      text-decoration: none;
-      color: var(--primary);
-      font-weight: 600;
-      margin-top: 0.5rem;
-      margin-bottom: 1rem;
-    }
-    .assignment-link-btn:hover {
-      background: var(--accent-soft);
     }
 
     /* Modal Backdrop */
@@ -787,10 +801,6 @@
       .video-workspace {
         padding: 1rem;
       }
-      .internship-planner-day {
-        grid-template-columns: 1fr;
-        gap: 0.25rem;
-      }
     }
   </style>
 </head>
@@ -935,7 +945,7 @@
 
   <!-- Student Workspace Layout -->
   <div id="student-view" class="student-layout hidden">
-    <!-- Left Sidebar: Course catalog and lessons -->
+    <!-- Course catalog and internship days -->
     <div class="lessons-sidebar">
       <section style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);">
         <h3 style="margin: 0 0 0.5rem;">Course catalog</h3>
@@ -944,7 +954,7 @@
         </p>
         <div id="student-course-catalog">Loading courses...</div>
       </section>
-      <div class="sidebar-header" id="course-title-header">Course Modules</div>
+      <div class="sidebar-header" id="course-title-header">Internship Days</div>
       <div id="course-trainer-name" style="padding: 0.65rem 1rem; color: #64748b; font-size: 0.9rem;">
         Trainer: —
       </div>
@@ -953,72 +963,16 @@
         <select id="student-course-select" aria-label="Choose a course">
         </select>
       </div>
-      <div id="lessons-list">Loading modules...</div>
     </div>
 
     <!-- Main Workspace -->
     <div class="video-workspace">
-      <section class="internship-planner" aria-labelledby="internship-planner-title">
-        <h2 id="internship-planner-title">12 Days Internship Planner</h2>
-        <p class="internship-planner-intro">A day-by-day guide to your internship projects and final review.</p>
-        <ol class="internship-planner-list">
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 1</span>
-            <p>What is GMB? Visit all the provided websites and verify that each one is running correctly.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 2</span>
-            <p>Project 1: Check the existing ranking for the given keywords and perform competitor analysis.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 3</span>
-            <p>Project 1: Create the post (image, content, and CTA) and review it.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 4</span>
-            <p>Project 2: Check the existing ranking for the given keywords and perform competitor analysis.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 5</span>
-            <p>Project 2: Create the post (image, content, and CTA) and review it.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 6</span>
-            <p>Project 3: Check the existing ranking for the given keywords and perform competitor analysis.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 7</span>
-            <p>Project 3: Create the post (image, content, and CTA) and review it.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 8</span>
-            <p>Project 4: Check the existing ranking for the given keywords and perform competitor analysis.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 9</span>
-            <p>Project 4: Create the post (image, content, and CTA) and review it.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 10</span>
-            <p>Project 5: Check the existing ranking for the given keywords and perform competitor analysis.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 11</span>
-            <p>Project 5: Create the post (image, content, and CTA) and review it.</p>
-          </li>
-          <li class="internship-planner-day">
-            <span class="internship-planner-day-label">Day 12</span>
-            <div>
-              <p>Check the ranking position for the keywords of all projects.</p>
-              <p>Visit the office to collect your certificate and stipend.</p>
-            </div>
-          </li>
-        </ol>
-      </section>
+      <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
+      <div id="day-one-checklist" class="hidden"></div>
 
       <div id="video-content-pane">
         <div style="display:flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
-          <h3 id="current-lesson-title" style="margin: 0;">Select a Lesson</h3>
+          <h3 id="current-lesson-title" style="margin: 0;">Select a Day</h3>
           <span id="video-status-badge" class="badge badge-neutral">Status: Unwatched</span>
         </div>
         
@@ -1027,7 +981,7 @@
         </div>
 
         <section class="assignment-card" aria-labelledby="lesson-questions-heading">
-          <div class="lesson-community-tabs" role="tablist" aria-label="Lesson community">
+          <div class="lesson-community-tabs" role="tablist" aria-label="Day community">
             <button id="lesson-qa-tab" class="lesson-community-tab active" type="button" role="tab"
               aria-selected="true" aria-controls="lesson-qa-panel"
               onclick="switchLessonCommunityTab('qa')">Q&amp;A</button>
@@ -1037,7 +991,7 @@
           </div>
           <div id="lesson-qa-panel" class="lesson-community-panel" role="tabpanel"
             aria-labelledby="lesson-qa-tab">
-            <h4 id="lesson-questions-heading" style="margin-top: 0;">Lesson questions &amp; answers</h4>
+            <h4 id="lesson-questions-heading" style="margin-top: 0;">Day questions &amp; answers</h4>
             <div id="lesson-questions-list"></div>
             <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
               <label for="lesson-question-input">Ask the course trainer</label>
@@ -1053,19 +1007,18 @@
         </section>
 
         <div id="lesson-assignment-card" class="assignment-card">
-          <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Lesson Assignment</h4>
+          <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Day Task</h4>
           <p id="assignment-prompt-text" style="color: #475569; margin: 0.5rem 0;"></p>
           
-          <div id="assignment-link-container"></div>
           <p id="trainer-feedback-text" class="hidden" style="color:#475569;"></p>
           <div class="form-group">
-            <label for="assignment-submission-text">Your submission (description or work link)</label>
+            <label for="assignment-submission-text">Your response</label>
             <textarea id="assignment-submission-text" maxlength="4000" required disabled style="width:100%; min-height:5rem; box-sizing:border-box;"></textarea>
           </div>
 
           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
             <button id="submit-assignment-btn" class="submit-btn" disabled style="width: auto; padding: 0.6rem 1.25rem; margin: 0;" onclick="submitAssignment()">
-              Mark Assignment Completed
+              Submit response for review
             </button>
             <span id="assignment-status-text" class="badge badge-neutral">Status: Not Submitted</span>
           </div>
@@ -1085,8 +1038,8 @@
       </div>
 
       <div id="student-no-unlocked-lessons" class="hidden">
-        <h3>No Lessons Available Yet</h3>
-        <p>Your course has no unlocked lessons yet. Complete the required prior work or contact your trainer.</p>
+        <h3>No Days Available Yet</h3>
+        <p>Your course has no unlocked days yet. Complete the required prior work or contact your trainer.</p>
       </div>
     </div>
   </div>
@@ -1134,7 +1087,7 @@
       <main id="trainer-courses">Loading student and assignment details...</main>
       <aside class="trainer-actions" aria-label="Course actions">
         <button type="button" class="submit-btn trainer-action-btn" onclick="openAddLessonModal()">
-          Add lesson to existing course
+          Add day to existing course
         </button>
         <button type="button" class="profile-link-btn trainer-action-btn" onclick="openNewCourseModal()">
           Add new course
@@ -1200,7 +1153,7 @@
         <textarea id="trainer-course-description" style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
       </div>
       <div id="trainer-course-lessons"></div>
-      <button type="button" class="profile-link-btn" onclick="addTrainerLesson('trainer-course-lessons')">Add another lesson</button>
+      <button type="button" class="profile-link-btn" onclick="addTrainerLesson('trainer-course-lessons')">Add another day</button>
       <button type="submit" class="submit-btn">Create course</button>
     </form>
   </div>
@@ -1209,7 +1162,7 @@
 <div id="trainer-lesson-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="trainer-lesson-modal-title">
   <div class="modal-box trainer-modal-box">
     <button type="button" class="modal-close-btn" aria-label="Close" onclick="closeTrainerModal('trainer-lesson-modal')">&times;</button>
-    <h3 id="trainer-lesson-modal-title">Add lesson to existing course</h3>
+    <h3 id="trainer-lesson-modal-title">Add day to existing course</h3>
     <form id="trainer-existing-lesson-form" onsubmit="event.preventDefault(); submitLessonToCourse();">
       <div class="form-group">
         <label for="trainer-existing-course">Your courses</label>
@@ -1217,7 +1170,7 @@
       </div>
       <p id="trainer-existing-lesson-order"></p>
       <div id="trainer-existing-lesson-fields"></div>
-      <button type="submit" class="submit-btn">Add lesson</button>
+      <button type="submit" class="submit-btn">Add day</button>
     </form>
   </div>
 </div>
@@ -1226,11 +1179,12 @@
   let activeStudentData = null;
   let activeEnrollmentId = null;
   let activeModuleId = null;
-  const openedAssignmentLinks = new Set();
   let studentCourseOptions = [];
   let youtubeApiPromise = null;
   let trainerDashboardData = { courses: [] };
   let studentLessonRefreshInProgress = false;
+  let activeDayOneSiteIndex = 0;
+  let activeDayOneQuestionIndex = 0;
 
   function safeHttpUrl(value) {
     if (typeof value !== 'string' || !value.trim()) return null;
@@ -1812,6 +1766,7 @@
   async function renderStudentDashboard() {
     document.getElementById('student-view').classList.remove('hidden');
     document.getElementById('video-content-pane').classList.add('hidden');
+    document.getElementById('day-one-checklist').classList.add('hidden');
     document.getElementById('student-pending-alert').classList.add('hidden');
     document.getElementById('student-no-courses').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
@@ -1962,7 +1917,18 @@
   function renderStudentCourse(activeCourse) {
     activeEnrollmentId = activeCourse.enrollment_id;
     activeStudentData = activeCourse;
+    const dayOneModule = activeCourse.modules.find(module => module.order_index === 1);
+    if (dayOneModule && dayOneModule.day_one) {
+      const firstIncompleteSite = dayOneModule.day_one.websites.findIndex(
+        (_, index) => !dayOneModule.day_one.answers[index].every(Boolean)
+      );
+      activeDayOneSiteIndex = firstIncompleteSite >= 0 ? firstIncompleteSite : 0;
+      const firstQuestion = dayOneModule.day_one.answers[activeDayOneSiteIndex]
+        .findIndex(answer => !answer);
+      activeDayOneQuestionIndex = firstQuestion >= 0 ? firstQuestion : 0;
+    }
     document.getElementById('video-content-pane').classList.remove('hidden');
+    document.getElementById('day-one-checklist').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
     document.getElementById('course-title-header').textContent = activeCourse.course_title;
     document.getElementById('course-trainer-name').textContent =
@@ -1971,14 +1937,18 @@
     const listContainer = document.getElementById('lessons-list');
     listContainer.replaceChildren();
     activeCourse.modules.forEach(mod => {
-      const item = document.createElement('div');
+      const item = document.createElement('button');
+      item.type = 'button';
       item.className = 'lesson-item' + (!mod.is_unlocked ? ' locked' : '');
+      item.setAttribute('role', 'tab');
+      item.setAttribute('aria-selected', 'false');
+      item.disabled = !mod.is_unlocked;
       item.dataset.moduleId = String(mod.module_id);
 
       const title = document.createElement('div');
       title.style.fontWeight = '600';
       title.style.fontSize = '0.95rem';
-      title.textContent = `Lesson ${mod.order_index}: ${mod.title}`;
+      title.textContent = `Day ${mod.order_index}`;
       item.appendChild(title);
 
       const statusRow = document.createElement('div');
@@ -1986,12 +1956,14 @@
       statusRow.style.justifyContent = 'space-between';
       statusRow.style.alignItems = 'center';
       statusRow.style.marginTop = '0.35rem';
-      const statusBadge = mod.assignment_status === 'approved'
-        ? createBadge('Passed', 'badge-success')
+      const statusBadge = mod.assignment_completed
+        ? createBadge('Completed', 'badge-success')
+        : mod.assignment_status === 'approved'
+        ? createBadge('Approved', 'badge-success')
         : mod.assignment_status === 'submitted'
           ? createBadge('Submitted', 'badge-warning')
           : mod.is_video_completed
-            ? createBadge('Video Done', 'badge-warning')
+            ? createBadge('In Progress', 'badge-warning')
             : createBadge('Not Started', 'badge-neutral');
       const availability = document.createElement('small');
       availability.style.color = mod.is_unlocked ? '#166534' : '#b45309';
@@ -2008,15 +1980,15 @@
         item.appendChild(lockReason);
       }
 
-      if (mod.is_unlocked) {
-        item.addEventListener('click', () => selectLesson(mod.module_id));
-      }
+      item.addEventListener('click', () => selectLesson(mod.module_id));
       listContainer.appendChild(item);
     });
 
-    const firstUnlockedModule = activeCourse.modules.find(mod => mod.is_unlocked);
-    if (firstUnlockedModule) {
-      selectLesson(firstUnlockedModule.module_id);
+    const selectedModule = activeCourse.modules.find(
+      mod => mod.module_id === activeModuleId && mod.is_unlocked
+    ) || activeCourse.modules.find(mod => mod.is_unlocked);
+    if (selectedModule) {
+      selectLesson(selectedModule.module_id);
     } else {
       document.getElementById('video-content-pane').classList.add('hidden');
       document.getElementById('student-no-unlocked-lessons').classList.remove('hidden');
@@ -2028,13 +2000,30 @@
     if (!mod || !mod.is_unlocked) return;
     activeModuleId = moduleId;
 
-    document.querySelectorAll('.lesson-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.lesson-item').forEach(el => {
+      el.classList.remove('active');
+      el.setAttribute('aria-selected', 'false');
+    });
     const currentTab = Array.from(document.querySelectorAll('.lesson-item')).find(
       el => el.dataset.moduleId === String(moduleId)
     );
-    if (currentTab) currentTab.classList.add('active');
+    if (currentTab) {
+      currentTab.classList.add('active');
+      currentTab.setAttribute('aria-selected', 'true');
+    }
 
-    document.getElementById('current-lesson-title').innerText = `Lesson ${mod.order_index}: ${mod.title}`;
+    const dayOnePane = document.getElementById('day-one-checklist');
+    const videoPane = document.getElementById('video-content-pane');
+    if (mod.order_index === 1 && mod.day_one) {
+      videoPane.classList.add('hidden');
+      dayOnePane.classList.remove('hidden');
+      renderDayOneChecklist(mod);
+      return;
+    }
+    dayOnePane.classList.add('hidden');
+    videoPane.classList.remove('hidden');
+
+    document.getElementById('current-lesson-title').innerText = `Day ${mod.order_index}`;
     renderLessonQuestions(mod.questions || []);
     document.getElementById('lesson-assignment-card').classList.remove('hidden');
     loadTaskReviewQr(mod);
@@ -2068,7 +2057,7 @@
         const iframe = document.createElement('iframe');
         iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(youtubeVideoId)}`;
         iframe.allowFullscreen = true;
-        iframe.title = 'Lesson video';
+        iframe.title = 'Day video';
         playerWrapper.replaceChildren(iframe);
       });
     } else if (videoUrl) {
@@ -2079,7 +2068,7 @@
       playerWrapper.appendChild(video);
     } else {
       const message = document.createElement('p');
-      message.textContent = 'This lesson has an invalid video URL.';
+      message.textContent = 'This day has an invalid video URL.';
       playerWrapper.appendChild(message);
     }
 
@@ -2092,60 +2081,18 @@
       videoBadge.innerText = 'Status: Unwatched';
     }
 
-    document.getElementById('assignment-prompt-text').innerText = mod.assignment_prompt || 'Complete the exercise provided in the assignment link below.';
-    const linkContainer = document.getElementById('assignment-link-container');
-    linkContainer.replaceChildren();
-    const assignmentUrl = mod.assignment_link && safeHttpUrl(mod.assignment_link);
-    if (assignmentUrl) {
-      const link = document.createElement('a');
-      link.href = assignmentUrl.href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.className = 'assignment-link-btn';
-      link.textContent = 'Open and complete your assigned project';
-      const linkEnrollmentId = activeEnrollmentId;
-      link.addEventListener('click', () => {
-        if (
-          activeEnrollmentId !== linkEnrollmentId
-          || activeModuleId !== mod.module_id
-          || mod.assignment_status === 'approved'
-          || mod.assignment_status === 'submitted'
-        ) return;
-        openedAssignmentLinks.add(`${activeEnrollmentId}:${mod.module_id}`);
-        const submitButton = document.getElementById('submit-assignment-btn');
-        const submissionInput = document.getElementById('assignment-submission-text');
-        const statusBadge = document.getElementById('assignment-status-text');
-        submitButton.disabled = false;
-        submissionInput.disabled = false;
-        statusBadge.className = 'badge badge-warning';
-        statusBadge.textContent = 'Status: Assignment link opened — ready to mark complete';
-      });
-      linkContainer.appendChild(link);
-    } else {
-      const message = document.createElement('p');
-      message.style.color = '#64748b';
-      message.style.fontStyle = 'italic';
-      message.textContent = mod.assignment_link
-        ? 'The assignment link is invalid.'
-        : 'No external link attached for this lesson.';
-      linkContainer.appendChild(message);
-    }
-
     const assignBadge = document.getElementById('assignment-status-text');
     const submitBtn = document.getElementById('submit-assignment-btn');
     const submissionInput = document.getElementById('assignment-submission-text');
     const feedbackText = document.getElementById('trainer-feedback-text');
     const assignmentVerified = mod.assignment_completed === true;
-    const assignmentLinkOpened = openedAssignmentLinks.has(
-      `${activeEnrollmentId}:${mod.module_id}`
-    );
     feedbackText.classList.toggle('hidden', !mod.trainer_feedback);
     feedbackText.textContent = mod.trainer_feedback ? `Trainer feedback: ${mod.trainer_feedback}` : '';
     submissionInput.value = mod.submission_notes || '';
 
-    if (mod.assignment_status === 'approved') {
+    if (assignmentVerified) {
       assignBadge.className = 'badge badge-success';
-      assignBadge.innerText = 'Status: Approved by Trainer';
+      assignBadge.innerText = 'Status: Completed';
       submitBtn.classList.add('hidden');
       submitBtn.disabled = true;
       submissionInput.disabled = true;
@@ -2156,17 +2103,281 @@
       submitBtn.disabled = true;
       submissionInput.disabled = true;
     } else {
-      assignBadge.className = `badge ${assignmentVerified ? 'badge-success' : assignmentLinkOpened ? 'badge-warning' : 'badge-neutral'}`;
-      assignBadge.innerText = assignmentVerified
-        ? (mod.assignment_status === 'rejected'
-          ? 'Status: Rejected — update your submission and resubmit'
-          : 'Status: Assignment completion verified')
-        : assignmentLinkOpened
-          ? 'Status: Assignment link opened — ready to submit'
-          : 'Status: Ready to submit for trainer review';
+      assignBadge.className = `badge ${mod.assignment_status === 'rejected' ? 'badge-danger' : 'badge-neutral'}`;
+      assignBadge.innerText = mod.assignment_status === 'rejected'
+        ? 'Status: Rejected — update your response and resubmit'
+        : 'Status: Not submitted';
       submitBtn.classList.remove('hidden');
       submitBtn.disabled = !mod.is_video_completed;
       submissionInput.disabled = !mod.is_video_completed;
+    }
+  }
+
+  function renderDayOneChecklist(module) {
+    const container = document.getElementById('day-one-checklist');
+    const day = module.day_one;
+    const firstIncompleteSite = day.websites.findIndex((_, siteIndex) =>
+      !day.answers[siteIndex].every(Boolean)
+    );
+    if (firstIncompleteSite >= 0 && activeDayOneSiteIndex > firstIncompleteSite) {
+      activeDayOneSiteIndex = firstIncompleteSite;
+    }
+    activeDayOneSiteIndex = Math.min(
+      activeDayOneSiteIndex,
+      day.websites.length - 1
+    );
+    const site = day.websites[activeDayOneSiteIndex];
+    const answers = day.answers[activeDayOneSiteIndex];
+    const firstUnansweredQuestion = answers.findIndex(answer => !answer);
+    if (
+      firstUnansweredQuestion >= 0
+      && activeDayOneQuestionIndex > firstUnansweredQuestion
+    ) {
+      activeDayOneQuestionIndex = firstUnansweredQuestion;
+    }
+    if (firstUnansweredQuestion < 0) {
+      activeDayOneQuestionIndex = Math.min(
+        activeDayOneQuestionIndex,
+        day.questions.length - 1
+      );
+    }
+
+    container.replaceChildren();
+    const heading = document.createElement('h2');
+    heading.textContent = 'Day 1: Website checks';
+    container.appendChild(heading);
+
+    const instructions = document.createElement('p');
+    instructions.className = 'day-one-notice';
+    instructions.textContent =
+      'Open each website, inspect it, and answer its checks in order. The next website unlocks after all checks for the current one are answered.';
+    container.appendChild(instructions);
+
+    const websiteTabs = document.createElement('div');
+    websiteTabs.className = 'day-one-website-tabs';
+    websiteTabs.setAttribute('role', 'tablist');
+    websiteTabs.setAttribute('aria-label', 'Websites to check');
+    day.websites.forEach((website, index) => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'day-one-step-tab day-one-website-tab'
+        + (index === activeDayOneSiteIndex ? ' active' : '');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(index === activeDayOneSiteIndex));
+      tab.textContent = website.name;
+      tab.disabled = index > 0
+        && !day.answers[index - 1].every(Boolean);
+      tab.addEventListener('click', () => {
+        activeDayOneSiteIndex = index;
+        const nextQuestion = day.answers[index].findIndex(answer => !answer);
+        activeDayOneQuestionIndex = nextQuestion >= 0
+          ? nextQuestion
+          : day.questions.length - 1;
+        renderDayOneChecklist(module);
+      });
+      websiteTabs.appendChild(tab);
+    });
+    container.appendChild(websiteTabs);
+
+    const panel = document.createElement('section');
+    panel.className = 'day-one-panel';
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-label', `${site.name} checks`);
+
+    const siteHeading = document.createElement('h3');
+    siteHeading.textContent = site.name;
+    panel.appendChild(siteHeading);
+
+    const siteLink = document.createElement('a');
+    siteLink.className = 'day-one-site-link';
+    siteLink.href = site.url;
+    siteLink.target = '_blank';
+    siteLink.rel = 'noopener noreferrer';
+    siteLink.textContent = site.visited
+      ? 'Open website again'
+      : 'Open website to begin checks';
+    siteLink.addEventListener('click', () => {
+      markDayOneSiteVisited(module, activeEnrollmentId, activeDayOneSiteIndex);
+    });
+    panel.appendChild(siteLink);
+
+    const safetyNotice = document.createElement('p');
+    safetyNotice.className = 'day-one-notice';
+    safetyNotice.textContent =
+      'Use only approved test details when trying forms. Never enter personal or customer data.';
+    panel.appendChild(safetyNotice);
+
+    if (!site.visited) {
+      const visitMessage = document.createElement('p');
+      visitMessage.textContent =
+        'Open this website in a new tab before answering its checks.';
+      panel.appendChild(visitMessage);
+      container.appendChild(panel);
+      return;
+    }
+
+    const questionTabs = document.createElement('div');
+    questionTabs.className = 'day-one-question-tabs';
+    questionTabs.setAttribute('role', 'tablist');
+    questionTabs.setAttribute('aria-label', `${site.name} questions`);
+    day.questions.forEach((question, index) => {
+      const questionTab = document.createElement('button');
+      questionTab.type = 'button';
+      questionTab.className = 'day-one-step-tab'
+        + (index === activeDayOneQuestionIndex ? ' active' : '');
+      questionTab.setAttribute('role', 'tab');
+      questionTab.setAttribute(
+        'aria-selected',
+        String(index === activeDayOneQuestionIndex)
+      );
+      questionTab.textContent = `Q${index + 1}`;
+      questionTab.title = question.label;
+      questionTab.disabled = !answers[index]
+        && index !== firstUnansweredQuestion;
+      questionTab.addEventListener('click', () => {
+        activeDayOneQuestionIndex = index;
+        renderDayOneChecklist(module);
+      });
+      questionTabs.appendChild(questionTab);
+    });
+    panel.appendChild(questionTabs);
+
+    const currentQuestion = day.questions[activeDayOneQuestionIndex];
+    const questionLabel = document.createElement('h4');
+    questionLabel.textContent =
+      `Check ${activeDayOneQuestionIndex + 1} of ${day.questions.length}: ${currentQuestion.label}`;
+    panel.appendChild(questionLabel);
+
+    if (firstUnansweredQuestion < 0) {
+      const completeMessage = document.createElement('p');
+      completeMessage.textContent = 'All checks for this website are complete.';
+      panel.appendChild(completeMessage);
+    }
+
+    const answerForm = document.createElement('form');
+    const options = [
+      ['yes', 'Yes'],
+      ['no', 'No'],
+      ['not_applicable', 'Not applicable'],
+    ];
+    const optionGroup = document.createElement('div');
+    optionGroup.className = 'day-one-answer-options';
+    options.forEach(([value, label]) => {
+      const optionLabel = document.createElement('label');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'day-one-answer';
+      radio.value = value;
+      radio.required = true;
+      radio.checked = answers[activeDayOneQuestionIndex] === value;
+      optionLabel.append(radio, document.createTextNode(label));
+      optionGroup.appendChild(optionLabel);
+    });
+    answerForm.appendChild(optionGroup);
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'submit-btn';
+    saveButton.style.width = 'auto';
+    saveButton.textContent = answers[activeDayOneQuestionIndex]
+      ? 'Update answer'
+      : 'Save answer and continue';
+    answerForm.appendChild(saveButton);
+    answerForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const selectedAnswer = answerForm.querySelector(
+        'input[name="day-one-answer"]:checked'
+      );
+      if (!selectedAnswer) return;
+      saveButton.disabled = true;
+      submitDayOneAnswer(
+        module,
+        activeEnrollmentId,
+        activeDayOneSiteIndex,
+        activeDayOneQuestionIndex,
+        selectedAnswer.value,
+        saveButton
+      );
+    });
+    panel.appendChild(answerForm);
+    container.appendChild(panel);
+  }
+
+  async function markDayOneSiteVisited(module, enrollmentId, websiteIndex) {
+    try {
+      const response = await fetch('/student/day-one/visit', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          enrollment_id: enrollmentId,
+          module_id: module.module_id,
+          website_index: websiteIndex,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not record this website visit.');
+      }
+      if (activeEnrollmentId === enrollmentId && activeModuleId === module.module_id) {
+        module.day_one = data.day_one;
+        renderDayOneChecklist(module);
+      }
+    } catch (error) {
+      alert(error.message || 'Could not record this website visit.');
+    }
+  }
+
+  async function submitDayOneAnswer(
+    module,
+    enrollmentId,
+    websiteIndex,
+    questionIndex,
+    answer,
+    saveButton
+  ) {
+    try {
+      const response = await fetch('/student/day-one/answer', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          enrollment_id: enrollmentId,
+          module_id: module.module_id,
+          website_index: websiteIndex,
+          question_index: questionIndex,
+          answer,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not save your answer.');
+      }
+      if (activeEnrollmentId !== enrollmentId || activeModuleId !== module.module_id) {
+        return;
+      }
+
+      module.day_one = data.day_one;
+      const nextSiteIndex = data.day_one.websites.findIndex((_, index) =>
+        !data.day_one.answers[index].every(Boolean)
+      );
+      if (nextSiteIndex < 0) {
+        await renderStudentDashboard();
+        return;
+      }
+      activeDayOneSiteIndex = nextSiteIndex;
+      const nextQuestionIndex = data.day_one.answers[nextSiteIndex].findIndex(
+        savedAnswer => !savedAnswer
+      );
+      activeDayOneQuestionIndex = nextQuestionIndex >= 0 ? nextQuestionIndex : 0;
+      renderDayOneChecklist(module);
+    } catch (error) {
+      alert(error.message || 'Could not save your answer.');
+      saveButton.disabled = false;
     }
   }
 
@@ -2175,7 +2386,7 @@
     container.replaceChildren();
     if (questions.length === 0) {
       const emptyState = document.createElement('p');
-      emptyState.textContent = 'No questions yet. Be the first to ask about this lesson.';
+      emptyState.textContent = 'No questions yet. Be the first to ask about this day.';
       container.appendChild(emptyState);
       return;
     }
@@ -2312,18 +2523,28 @@
       if (!response.ok) throw new Error(data.detail || 'Could not refresh assignment status.');
       const course = data.courses.find(item => item.enrollment_id === activeEnrollmentId);
       if (!course) throw new Error('Course enrollment was not found.');
-      const previousModule = activeStudentData
-        && activeStudentData.modules.find(item => item.module_id === activeModuleId);
+      const previousModules = activeStudentData ? activeStudentData.modules : [];
+      const previousModule = previousModules.find(
+        item => item.module_id === activeModuleId
+      );
       const updatedModule = course.modules.find(item => item.module_id === activeModuleId);
+      const availabilityChanged = course.modules.some(module => {
+        const previous = previousModules.find(item => item.module_id === module.module_id);
+        return previous && previous.is_unlocked !== module.is_unlocked;
+      });
       activeStudentData = course;
-      if (!updatedModule) throw new Error('Lesson was not found in the course.');
-      if (previousModule?.assignment_status !== updatedModule.assignment_status) {
-        selectLesson(activeModuleId);
+      if (!updatedModule) throw new Error('Day was not found in the course.');
+      if (
+        availabilityChanged
+        || previousModule?.assignment_completed !== updatedModule.assignment_completed
+        || previousModule?.assignment_status !== updatedModule.assignment_status
+      ) {
+        renderStudentCourse(course);
       } else if (previousModule?.review_available !== updatedModule.review_available) {
         loadTaskReviewQr(updatedModule);
       }
     } catch (err) {
-      console.error('Could not refresh the active lesson:', err);
+      console.error('Could not refresh the active day:', err);
     } finally {
       studentLessonRefreshInProgress = false;
     }
@@ -2401,7 +2622,7 @@
     const submissionInput = document.getElementById('assignment-submission-text');
     const submissionText = submissionInput.value.trim();
     if (!submissionText) {
-      alert('Please enter a description or link to your completed work.');
+      alert('Please enter your response in the portal.');
       submissionInput.focus();
       return;
     }
@@ -2427,7 +2648,7 @@
         alert(detail || "Submission failed");
         return;
       }
-      alert("Assignment successfully submitted for review!");
+      alert("Your response was submitted for trainer review.");
       renderStudentDashboard();
     } catch (err) {
       alert("Error submitting assignment.");
@@ -2569,7 +2790,7 @@
         progress.setAttribute('aria-valuenow', String(selectedCourse.completed_slots || 0));
         progress.setAttribute(
           'aria-label',
-          `${selectedCourse.completed_slots || 0} of ${selectedCourse.total_slots || 0} lessons complete`
+          `${selectedCourse.completed_slots || 0} of ${selectedCourse.total_slots || 0} days complete`
         );
         (selectedCourse.modules || []).forEach(module => {
           const segment = document.createElement('span');
@@ -2671,7 +2892,7 @@
         const enrolled = course.enrolled_at
           ? new Date(course.enrolled_at).toLocaleDateString()
           : '—';
-        item.textContent = `${course.course_title}: enrolled ${enrolled}, ${course.completed_slots}/${course.total_slots} lessons complete`;
+        item.textContent = `${course.course_title}: enrolled ${enrolled}, ${course.completed_slots}/${course.total_slots} days complete`;
         courseDetails.appendChild(item);
       });
       if (courses.length) details.appendChild(courseDetails);
@@ -2780,7 +3001,7 @@
       progress.setAttribute('aria-valuenow', String(Math.min(student.completed_slots || 0, 12)));
       progress.setAttribute(
         'aria-label',
-        `${student.student_name}: ${student.completed_slots || 0} of ${student.total_slots || 0} lessons complete`
+        `${student.student_name}: ${student.completed_slots || 0} of ${student.total_slots || 0} days complete`
       );
       for (let index = 0; index < 12; index += 1) {
         const segment = document.createElement('span');
@@ -3054,7 +3275,7 @@
 
         const summary = document.createElement('p');
         summary.className = 'trainer-course-summary';
-        summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} lesson(s)`;
+        summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} day(s)`;
         section.appendChild(summary);
         const lessons = document.createElement('div');
         lessons.className = 'trainer-lessons';
@@ -3065,7 +3286,7 @@
           const lessonHeading = document.createElement('div');
           lessonHeading.className = 'trainer-lesson-heading';
           const lessonTitle = document.createElement('h5');
-          lessonTitle.textContent = `Lesson ${module.order_index || index + 1}: ${module.title}`;
+          lessonTitle.textContent = `Day ${module.order_index || index + 1}`;
           lessonHeading.appendChild(lessonTitle);
           lessonCard.appendChild(lessonHeading);
 
@@ -3075,54 +3296,6 @@
             assignmentPrompt.textContent = module.assignment_prompt;
             lessonCard.appendChild(assignmentPrompt);
           }
-          const assignmentLinks = new Map();
-          (course.students || []).forEach(student => {
-            const studentModule = (student.modules || []).find(
-              progress => progress.module_id === module.module_id
-            );
-            const studentAssignmentUrl = studentModule && studentModule.assignment_link
-              ? safeHttpUrl(studentModule.assignment_link)
-              : null;
-            if (!studentAssignmentUrl) return;
-
-            const existingLink = assignmentLinks.get(studentAssignmentUrl.href);
-            if (existingLink) {
-              existingLink.studentNames.push(student.student_name);
-              return;
-            }
-            assignmentLinks.set(studentAssignmentUrl.href, {
-              label: 'Open assignment',
-              studentNames: [student.student_name],
-            });
-          });
-          if (assignmentLinks.size === 0) {
-            const assignmentUrl = module.assignment_link && safeHttpUrl(module.assignment_link);
-            if (assignmentUrl) {
-              assignmentLinks.set(assignmentUrl.href, {
-                label: 'Open assignment',
-                studentNames: [],
-              });
-            }
-          }
-          if (assignmentLinks.size === 0) {
-            const noAssignmentLink = document.createElement('p');
-            noAssignmentLink.className = 'trainer-course-summary';
-            noAssignmentLink.textContent = 'No assignment link is set for this lesson.';
-            lessonCard.appendChild(noAssignmentLink);
-          } else {
-            assignmentLinks.forEach((linkDetails, href) => {
-              const assignmentLink = document.createElement('a');
-              assignmentLink.className = 'trainer-resource-link';
-              assignmentLink.href = href;
-              assignmentLink.target = '_blank';
-              assignmentLink.rel = 'noopener noreferrer';
-              assignmentLink.textContent = linkDetails.studentNames.length > 1
-                ? `${linkDetails.label} for ${linkDetails.studentNames.join(', ')}`
-                : linkDetails.label;
-              lessonCard.appendChild(assignmentLink);
-            });
-          }
-
           const questions = module.questions || [];
           const questionsSection = document.createElement('section');
           questionsSection.className = 'trainer-lesson-questions';
@@ -3132,7 +3305,7 @@
           if (questions.length === 0) {
             const noQuestions = document.createElement('p');
             noQuestions.className = 'trainer-course-summary';
-            noQuestions.textContent = 'No questions for this lesson yet.';
+            noQuestions.textContent = 'No questions for this day yet.';
             questionsSection.appendChild(noQuestions);
           } else {
             questions.forEach(question => {
@@ -3428,41 +3601,10 @@
         prompt.textContent = assignment.assignment_prompt;
         assignmentCell.appendChild(prompt);
       }
-      const assignmentUrl = assignment.assignment_link && safeHttpUrl(assignment.assignment_link);
-      if (assignmentUrl) {
-        const assignmentLink = document.createElement('a');
-        assignmentLink.className = 'trainer-resource-link';
-        assignmentLink.href = assignmentUrl.href;
-        assignmentLink.target = '_blank';
-        assignmentLink.rel = 'noopener noreferrer';
-        assignmentLink.textContent = 'Open student assignment';
-        assignmentCell.appendChild(assignmentLink);
-      } else {
-        const missingLink = document.createElement('p');
-        missingLink.textContent = 'No assignment link available.';
-        assignmentCell.appendChild(missingLink);
-      }
 
       const submissionCell = row.insertCell();
       const submissionNotes = assignment.submission_notes || '';
-      const submittedUrlMatch = submissionNotes.match(/https?:\/\/[^\s<>"']+/i);
-      const submittedUrl = submittedUrlMatch
-        && safeHttpUrl(submittedUrlMatch[0].replace(/[.,;:!?)]+$/, ''));
-      if (submittedUrl) {
-        const submissionLink = document.createElement('a');
-        submissionLink.className = 'trainer-resource-link';
-        submissionLink.href = submittedUrl.href;
-        submissionLink.target = '_blank';
-        submissionLink.rel = 'noopener noreferrer';
-        submissionLink.textContent = submissionNotes;
-        submissionLink.addEventListener('click', event => {
-          event.preventDefault();
-          openStudentSubmission(assignment.progress_id, submittedUrl.href);
-        });
-        submissionCell.appendChild(submissionLink);
-      } else {
-        submissionCell.textContent = submissionNotes || '(No submission details)';
-      }
+      submissionCell.textContent = submissionNotes || '(No submission details)';
 
       const decisionCell = row.insertCell();
       const feedback = document.createElement('textarea');
@@ -3476,8 +3618,7 @@
       const approveButton = document.createElement('button');
       approveButton.type = 'button';
       approveButton.className = 'submit-btn';
-      approveButton.textContent = "Approve student's work";
-      approveButton.disabled = !assignmentUrl;
+      approveButton.textContent = "Approve student's response";
       approveButton.addEventListener('click', () => evaluateAssignment(
         assignment.progress_id,
         true,
@@ -3500,32 +3641,6 @@
 
     wrapper.appendChild(table);
     container.appendChild(wrapper);
-  }
-
-  async function openStudentSubmission(progressId, submissionUrl) {
-    const openedWindow = window.open('about:blank', '_blank');
-    if (openedWindow) openedWindow.opener = null;
-    try {
-      const response = await fetch(
-        `/trainer/assignments/${encodeURIComponent(progressId)}/open-submission`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
-          },
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Could not open the student submission.');
-      if (openedWindow) {
-        openedWindow.location.href = submissionUrl;
-      } else {
-        window.location.href = submissionUrl;
-      }
-    } catch (error) {
-      if (openedWindow) openedWindow.close();
-      alert(error.message || 'Could not open the student submission.');
-    }
   }
 
   async function replyToLessonQuestion(questionId, replyInput, replyButton) {
@@ -3671,14 +3786,13 @@
     fieldset.className = 'trainer-lesson assignment-card';
 
     const legend = document.createElement('legend');
-    legend.textContent = `Lesson ${lessonNumber}`;
+    legend.textContent = `Day ${lessonNumber}`;
     fieldset.appendChild(legend);
 
     const fields = [
-      ['Lesson title', 'lesson-title', 'text', true],
-      ['Video URL', 'lesson-video-url', 'url', true],
-      ['Assignment prompt (optional)', 'lesson-assignment-prompt', 'textarea', false],
-      ['Assignment link', 'lesson-assignment-link', 'url', false],
+      ['Day title', 'lesson-title', 'text', true],
+      ['Video URL (optional for Day 1)', 'lesson-video-url', 'url', lessonNumber !== 1],
+      ['Day task (optional)', 'lesson-assignment-prompt', 'textarea', false],
     ];
     fields.forEach(([labelText, className, type, required]) => {
       const group = document.createElement('div');
@@ -3704,11 +3818,11 @@
     const removeButton = document.createElement('button');
     removeButton.type = 'button';
     removeButton.className = 'profile-link-btn';
-    removeButton.textContent = 'Remove lesson';
+    removeButton.textContent = 'Remove day';
     removeButton.addEventListener('click', () => {
       fieldset.remove();
       container.querySelectorAll('.trainer-lesson legend')
-        .forEach((item, index) => { item.textContent = `Lesson ${index + 1}`; });
+        .forEach((item, index) => { item.textContent = `Day ${index + 1}`; });
     });
     fieldset.appendChild(removeButton);
     container.appendChild(fieldset);
@@ -3724,7 +3838,7 @@
 
   function openAddLessonModal() {
     if (!trainerDashboardData.courses || trainerDashboardData.courses.length === 0) {
-      alert('You have no courses yet. Create a course before adding lessons.');
+      alert('You have no courses yet. Create a course before adding days.');
       return;
     }
     const select = document.getElementById('trainer-existing-course');
@@ -3748,7 +3862,11 @@
       course => course.id === document.getElementById('trainer-existing-course').value
     );
     const nextOrder = selectedCourse ? (selectedCourse.modules || []).length + 1 : 1;
-    document.getElementById('trainer-existing-lesson-order').textContent = `This will be lesson ${nextOrder}.`;
+    document.getElementById('trainer-existing-lesson-order').textContent = `This will be Day ${nextOrder}.`;
+    const videoInput = document.querySelector(
+      '#trainer-existing-lesson-fields .lesson-video-url'
+    );
+    if (videoInput) videoInput.required = nextOrder !== 1;
   }
 
   function closeTrainerModal(modalId) {
@@ -3769,7 +3887,6 @@
       title: lesson.querySelector('.lesson-title').value.trim(),
       video_url: lesson.querySelector('.lesson-video-url').value.trim(),
       assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim() || null,
-      assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
     };
     const token = localStorage.getItem('jwt_token');
     try {
@@ -3785,13 +3902,13 @@
       if (!response.ok) {
         alert(response.status === 403
           ? 'This action requires a trainer account. Sign out and sign in with your trainer account.'
-          : data.detail || 'Could not add the lesson.');
+          : data.detail || 'Could not add the day.');
         return;
       }
       closeTrainerModal('trainer-lesson-modal');
       await renderTrainerDashboard();
     } catch (err) {
-      alert('Network error while adding the lesson.');
+      alert('Network error while adding the day.');
     }
   }
 
@@ -3806,7 +3923,6 @@
         title: lesson.querySelector('.lesson-title').value.trim(),
         video_url: lesson.querySelector('.lesson-video-url').value.trim(),
         assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim() || null,
-        assignment_link: lesson.querySelector('.lesson-assignment-link').value.trim() || null,
       })),
     };
 

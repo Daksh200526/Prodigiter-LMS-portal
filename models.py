@@ -77,7 +77,6 @@ class Module(Base):
     title = Column(String(255), nullable=False)
     video_url = Column(String(500), nullable=False)
     assignment_prompt = Column(Text, nullable=False)
-    assignment_link = Column(String(500), nullable=True)
 
     course = relationship("Course", back_populates="modules")
     progress_records = relationship("StudentProgress", back_populates="module")
@@ -96,7 +95,6 @@ class Enrollment(Base):
     student_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     course_id = Column(String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     enrolled_at = Column(DateTime, default=datetime.utcnow)
-    project_index = Column(Integer, nullable=True)
     is_completed = Column(Boolean, default=False)
     certificate_id = Column(String(50), nullable=True)
 
@@ -136,6 +134,7 @@ class StudentProgress(Base):
     review_answers = Column(Text, nullable=True)
     generated_review = Column(Text, nullable=True)
     review_generated_at = Column(DateTime, nullable=True)
+    day_one_state = Column(Text, nullable=True)
 
     assignment_status = Column(String(30), default=AssignmentStatus.NOT_STARTED.value)
     is_approved = Column(Boolean, default=False)

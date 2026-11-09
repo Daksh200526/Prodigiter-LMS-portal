@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 class LoginPassword(BaseModel):
     email: EmailStr
@@ -26,9 +26,8 @@ class PasswordReset(BaseModel):
 class ModuleCreate(BaseModel):
     order_index: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=255)
-    video_url: str = Field(min_length=1, max_length=500)
+    video_url: str = Field(default="", max_length=500)
     assignment_prompt: Optional[str] = None
-    assignment_link: Optional[str] = Field(default=None, max_length=500)
 
 class CourseCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
@@ -57,6 +56,18 @@ class LessonQuestionReply(BaseModel):
 
 class TaskReviewAnswers(BaseModel):
     answers: Dict[str, str]
+
+class DayOneVisit(BaseModel):
+    enrollment_id: str
+    module_id: str
+    website_index: int = Field(ge=0, le=4)
+
+class DayOneAnswer(BaseModel):
+    enrollment_id: str
+    module_id: str
+    website_index: int = Field(ge=0, le=4)
+    question_index: int = Field(ge=0, le=8)
+    answer: Literal["yes", "no", "not_applicable"]
 
 class DeletionProcess(BaseModel):
     request_id: str

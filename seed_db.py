@@ -227,23 +227,6 @@ HTML = r"""<!DOCTYPE html>
       padding: 1.25rem;
       margin-top: 1rem;
     }
-    .assignment-link-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      padding: 0.65rem 1rem;
-      border-radius: 6px;
-      text-decoration: none;
-      color: var(--primary);
-      font-weight: 600;
-      margin-top: 0.5rem;
-      margin-bottom: 1rem;
-    }
-    .assignment-link-btn:hover {
-      background: #eff6ff;
-    }
 
     /* Modal Backdrop */
     .modal-backdrop {
@@ -395,14 +378,12 @@ HTML = r"""<!DOCTYPE html>
         </div>
 
         <div class="assignment-card">
-          <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Lesson Assignment</h4>
+          <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Day Task</h4>
           <p id="assignment-prompt-text" style="color: #475569; margin: 0.5rem 0;"></p>
           
-          <div id="assignment-link-container"></div>
-
           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
             <button id="submit-assignment-btn" class="submit-btn" style="width: auto; padding: 0.6rem 1.25rem; margin: 0;" onclick="submitAssignment()">
-              Mark Assignment Completed
+              Submit response for review
             </button>
             <span id="assignment-status-text" class="badge badge-neutral">Status: Not Submitted</span>
           </div>
@@ -693,7 +674,7 @@ HTML = r"""<!DOCTYPE html>
           : '<span class="badge badge-neutral">Not Started</span>';
 
         item.innerHTML = `
-          <div style="font-weight: 600; font-size: 0.95rem;">Lesson ${mod.order_index}: ${mod.title}</div>
+          <div style="font-weight: 600; font-size: 0.95rem;">Day ${mod.order_index}</div>
           <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 0.35rem;">
             ${statusBadge}
             <small style="color: ${mod.is_unlocked ? '#166534' : '#b45309'};">${mod.is_unlocked ? 'Available' : 'Locked'}</small>
@@ -725,7 +706,7 @@ HTML = r"""<!DOCTYPE html>
     const currentTab = document.getElementById(`mod-tab-${moduleId}`);
     if (currentTab) currentTab.classList.add('active');
 
-    document.getElementById('current-lesson-title').innerText = `Lesson ${mod.order_index}: ${mod.title}`;
+    document.getElementById('current-lesson-title').innerText = `Day ${mod.order_index}`;
 
     const playerWrapper = document.getElementById('media-player-wrapper');
     if (mod.video_url.includes('youtube.com') || mod.video_url.includes('youtu.be')) {
@@ -746,17 +727,8 @@ HTML = r"""<!DOCTYPE html>
       videoBadge.innerText = 'Status: Unwatched';
     }
 
-    document.getElementById('assignment-prompt-text').innerText = mod.assignment_prompt || 'Complete the exercise provided in the assignment link below.';
-    const linkContainer = document.getElementById('assignment-link-container');
-    if (mod.assignment_link) {
-      linkContainer.innerHTML = `
-        <a href="${mod.assignment_link}" target="_blank" class="assignment-link-btn">
-          <span>&#128279; Open Trainer Assignment Link &rarr;</span>
-        </a>
-      `;
-    } else {
-      linkContainer.innerHTML = '<p style="color:#64748b; font-style:italic;">No external link attached for this lesson.</p>';
-    }
+    document.getElementById('assignment-prompt-text').innerText =
+      mod.assignment_prompt || 'Complete the day task in the portal.';
 
     const assignBadge = document.getElementById('assignment-status-text');
     const submitBtn = document.getElementById('submit-assignment-btn');

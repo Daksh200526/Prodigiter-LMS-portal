@@ -25,9 +25,9 @@ import models
 import auth
 import schemas
 from config import settings
-from database import SessionLocal, engine, get_db
+from database import engine, get_db
 from review_service import REVIEW_QUESTIONS, ReviewProviderError, generate_review
-from utils import PROJECT_ASSIGNMENT_COUNT, get_project_assignment_link
+
 import qrcode
 from whatsapp_service import (
     WhatsAppError,
@@ -79,14 +79,6 @@ if "registered_at" not in {
             "ALTER TABLE users ADD COLUMN registered_at DATETIME"
         ))
 
-if "project_index" not in {
-    column["name"] for column in inspect(engine).get_columns("enrollments")
-}:
-    with engine.begin() as connection:
-        connection.execute(text(
-            "ALTER TABLE enrollments ADD COLUMN project_index INTEGER"
-        ))
-
 progress_columns = {
     column["name"] for column in inspect(engine).get_columns("progress")
 }
@@ -95,6 +87,7 @@ for column_name, column_definition in (
     ("review_answers", "TEXT"),
     ("generated_review", "TEXT"),
     ("review_generated_at", "DATETIME"),
+    ("day_one_state", "TEXT"),
 ):
     if column_name not in progress_columns:
         try:
@@ -116,6 +109,25 @@ with engine.begin() as connection:
     ))
 
 app = FastAPI(title="prodigiter LMS Portal")
+
+DAY_ONE_WEBSITES = (
+    {"key": "beyondental", "name": "Beyon Dental", "url": "https://beyondental.in/"},
+    {"key": "birchstone", "name": "Birchstone", "url": "https://birchstone.in/"},
+    {"key": "nutriactivania", "name": "Nutriactivania", "url": "https://nutriactivania.com/"},
+    {"key": "gemygog", "name": "Gemygog", "url": "https://gemygog.com/"},
+    {"key": "webconverts", "name": "Webconverts", "url": "https://webconverts.com/"},
+)
+DAY_ONE_QUESTIONS = (
+    {"key": "website_working", "label": "Is the website working?"},
+    {"key": "home_page", "label": "Is the home page working?"},
+    {"key": "about_page", "label": "Is the About page working?"},
+    {"key": "phone_number", "label": "Is the phone number present and working?"},
+    {"key": "email", "label": "Is the email address present and working?"},
+    {"key": "google_map", "label": "Is the Google Map available and working?"},
+    {"key": "form", "label": "Is a contact form available and working?"},
+    {"key": "thank_you_page", "label": "Is the Thank You page available after form submission?"},
+    {"key": "social_media", "label": "Is social media integration available and working?"},
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,33 +158,6 @@ def normalize_course_subject(value: str | None) -> str | None:
     )
 
 
-def _backfill_enrollment_project_links() -> None:
-    db = SessionLocal()
-    try:
-        enrollments = db.query(models.Enrollment).order_by(
-            models.Enrollment.course_id,
-            models.Enrollment.enrolled_at,
-            models.Enrollment.id,
-        ).all()
-        project_indexes: dict[str, int] = {}
-        updated = False
-        for enrollment in enrollments:
-            project_index = project_indexes.get(enrollment.course_id, 0)
-            if enrollment.project_index is None:
-                enrollment.project_index = (
-                    project_index % PROJECT_ASSIGNMENT_COUNT
-                )
-                updated = True
-            project_indexes[enrollment.course_id] = project_index + 1
-        if updated:
-            db.commit()
-    finally:
-        db.close()
-
-
-_backfill_enrollment_project_links()
-
-
 def _enroll_student_in_course(
     db: Session,
     student: models.User,
@@ -185,14 +170,10 @@ def _enroll_student_in_course(
     if existing_enrollment:
         return
 
-    enrollment_count = db.query(func.count(models.Enrollment.id)).filter_by(
-        course_id=course.id,
-    ).scalar() or 0
     db.add(models.Enrollment(
         id=str(uuid.uuid4()),
         student_id=student.id,
         course_id=course.id,
-        project_index=enrollment_count % PROJECT_ASSIGNMENT_COUNT,
     ))
     db.flush()
 
@@ -598,11 +579,25 @@ def student_dashboard(
         for idx, mod in enumerate(modules):
             prog = progress_by_module.get(mod.id)
 
-            is_video_done = prog.is_video_completed if prog else False
-            status_val = prog.assignment_status if prog else "not_started"
+            day_one_complete = _day_one_complete(prog) if mod.order_index == 1 else False
+            is_video_done = (
+                day_one_complete
+                if mod.order_index == 1
+                else prog.is_video_completed if prog else False
+            )
+            assignment_done = (
+                day_one_complete
+                if mod.order_index == 1
+                else prog.assignment_completed if prog else False
+            )
+            status_val = (
+                "completed" if day_one_complete else "not_started"
+            ) if mod.order_index == 1 else (
+                prog.assignment_status if prog else "not_started"
+            )
             feedback = prog.trainer_feedback if prog else ""
 
-            if prog and prog.is_video_completed and prog.assignment_completed:
+            if is_video_done and assignment_done:
                 completed_count += 1
 
             is_unlocked, lock_reason = _module_unlock_status(
@@ -612,29 +607,29 @@ def student_dashboard(
             modules_list.append({
                 "module_id": mod.id,
                 "order_index": mod.order_index,
-                "title": mod.title,
-                "video_url": mod.video_url if is_unlocked else None,
-                "assignment_prompt": mod.assignment_prompt or "",
-                "assignment_link": (
-                    get_project_assignment_link(mod.order_index, enr.project_index)
-                    if is_unlocked
+                "title": f"Day {mod.order_index}",
+                "video_url": (
+                    mod.video_url
+                    if is_unlocked and mod.order_index != 1
                     else None
-                ) or (
-                    mod.assignment_link if is_unlocked else None
+                ),
+                "assignment_prompt": (
+                    "Complete the website checks for each site."
+                    if mod.order_index == 1
+                    else mod.assignment_prompt or ""
                 ),
                 "is_unlocked": is_unlocked,
                 "lock_reason": lock_reason,
                 "is_video_completed": is_video_done,
-                "assignment_completed": prog.assignment_completed if prog else False,
+                "assignment_completed": assignment_done,
                 "assignment_status": status_val,
                 "submission_notes": prog.submission_notes if prog else "",
                 "trainer_feedback": feedback,
-                "review_available": bool(
-                    prog and (
-                        prog.assignment_status == "approved"
-                        or (prog.assignment_completed and prog.assignment_completed_at)
-                    )
-                ),
+                "day_one": _day_one_payload(prog) if mod.order_index == 1 else None,
+                "review_available": bool(mod.order_index != 1 and prog and (
+                    prog.assignment_status == "approved"
+                    or (prog.assignment_completed and prog.assignment_completed_at)
+                )),
                 "questions": [
                     _lesson_question_payload(question)
                     for question in mod.lesson_questions
@@ -795,6 +790,105 @@ def decide_course_access_request(
     return {"request_id": access_request.id, "status": access_request.status}
 
 
+def _new_day_one_state() -> dict:
+    return {
+        "visited": [False] * len(DAY_ONE_WEBSITES),
+        "answers": [
+            [None] * len(DAY_ONE_QUESTIONS)
+            for _ in DAY_ONE_WEBSITES
+        ],
+    }
+
+
+def _load_day_one_state(progress: models.StudentProgress | None) -> dict:
+    if not progress or not progress.day_one_state:
+        return _new_day_one_state()
+
+    try:
+        state = json.loads(progress.day_one_state)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Day 1 progress data is invalid. Please contact support.",
+        ) from error
+
+    valid_answers = {"yes", "no", "not_applicable"}
+    if (
+        not isinstance(state, dict)
+        or not isinstance(state.get("visited"), list)
+        or len(state["visited"]) != len(DAY_ONE_WEBSITES)
+        or any(type(visited) is not bool for visited in state["visited"])
+        or not isinstance(state.get("answers"), list)
+        or len(state["answers"]) != len(DAY_ONE_WEBSITES)
+        or any(
+            not isinstance(site_answers, list)
+            or len(site_answers) != len(DAY_ONE_QUESTIONS)
+            or any(
+                answer is not None
+                and (not isinstance(answer, str) or answer not in valid_answers)
+                for answer in site_answers
+            )
+            for site_answers in state["answers"]
+        )
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Day 1 progress data is invalid. Please contact support.",
+        )
+    return state
+
+
+def _day_one_site_complete(state: dict, website_index: int) -> bool:
+    return all(state["answers"][website_index])
+
+
+def _day_one_complete(progress: models.StudentProgress | None) -> bool:
+    if not progress:
+        return False
+    state = _load_day_one_state(progress)
+    return (
+        all(state["visited"])
+        and all(_day_one_site_complete(state, index) for index in range(len(DAY_ONE_WEBSITES)))
+    )
+
+
+def _day_one_payload(progress: models.StudentProgress | None) -> dict:
+    state = _load_day_one_state(progress)
+    websites = [
+        {
+            **website,
+            "visited": state["visited"][index],
+        }
+        for index, website in enumerate(DAY_ONE_WEBSITES)
+    ]
+    return {
+        "websites": websites,
+        "questions": list(DAY_ONE_QUESTIONS),
+        "answers": state["answers"],
+        "complete": _day_one_complete(progress),
+    }
+
+
+def _get_or_create_day_one_progress(
+    db: Session,
+    enrollment_id: str,
+    module_id: str,
+) -> models.StudentProgress:
+    progress = db.query(models.StudentProgress).filter_by(
+        enrollment_id=enrollment_id,
+        module_id=module_id,
+    ).first()
+    if not progress:
+        progress = models.StudentProgress(
+            id=str(uuid.uuid4()),
+            enrollment_id=enrollment_id,
+            module_id=module_id,
+            assignment_status="not_started",
+        )
+        db.add(progress)
+    return progress
+
+
 def _module_unlock_status(
     db: Session,
     enrollment: models.Enrollment,
@@ -815,11 +909,16 @@ def _module_unlock_status(
     else:
         previous_progress = progress_by_module.get(previous_module.id)
     if not previous_progress or not previous_progress.is_video_completed:
-        return False, f"Complete Lesson {previous_module.order_index} first."
+        return False, f"Complete Day {previous_module.order_index} first."
+    if (
+        previous_module.order_index == 1
+        and not _day_one_complete(previous_progress)
+    ):
+        return False, "Complete all Day 1 website checks first."
     if not previous_progress.assignment_completed:
-        return False, f"Complete the task for Lesson {previous_module.order_index} first."
+        return False, f"Complete the task for Day {previous_module.order_index} first."
     if not previous_progress.assignment_completed_at:
-        return False, f"Lesson {previous_module.order_index} completion time is missing."
+        return False, f"Day {previous_module.order_index} completion time is missing."
 
     completed_at = previous_progress.assignment_completed_at
     if completed_at.tzinfo is None:
@@ -861,13 +960,13 @@ def _get_unlocked_student_module(
         None
     )
     if module_index is None:
-        raise HTTPException(status_code=404, detail="Lesson not found.")
+        raise HTTPException(status_code=404, detail="Day not found.")
 
     is_unlocked, _ = _module_unlock_status(
         db, enrollment, modules, module_index, datetime.datetime.now(timezone.utc)
     )
     if not is_unlocked:
-        raise HTTPException(status_code=403, detail="This lesson is still locked.")
+        raise HTTPException(status_code=403, detail="This day is still locked.")
     return enrollment, modules[module_index]
 
 
@@ -983,7 +1082,12 @@ async def assignment_completion_webhook(
         course_id=enrollment.course_id,
     ).first()
     if not module:
-        raise HTTPException(status_code=404, detail="Lesson not found in this enrollment.")
+        raise HTTPException(status_code=404, detail="Day not found in this enrollment.")
+    if module.order_index == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Complete Day 1 using the website checks in the portal.",
+        )
 
     progress = db.query(models.StudentProgress).filter_by(
         enrollment_id=enrollment.id,
@@ -992,12 +1096,12 @@ async def assignment_completion_webhook(
     if not progress:
         raise HTTPException(
             status_code=409,
-            detail="Complete the lesson video before marking its task complete.",
+            detail="Complete the day video before marking its task complete.",
         )
     if not progress.is_video_completed:
         raise HTTPException(
             status_code=409,
-            detail="Complete the lesson video before marking its task complete.",
+            detail="Complete the day video before marking its task complete.",
         )
     if not progress.assignment_completed:
         progress.assignment_completed = True
@@ -1029,6 +1133,7 @@ def _get_review_progress(
     ).filter_by(id=progress_id).first()
     if (
         not progress
+        or (progress.module and progress.module.order_index == 1)
         or not progress.assignment_completed
         or not progress.assignment_completed_at
         or not hmac.compare_digest(_review_token(progress), token)
@@ -1063,7 +1168,12 @@ def task_review_qr(
         models.Enrollment.student_id == current_user.id,
     ).first()
     if not progress:
-        raise HTTPException(status_code=404, detail="Lesson progress not found.")
+        raise HTTPException(status_code=404, detail="Day progress not found.")
+    if progress.module and progress.module.order_index == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Day 1 does not use an external review form.",
+        )
     if progress.assignment_status == "approved" and (
         not progress.assignment_completed or not progress.assignment_completed_at
     ):
@@ -1114,7 +1224,7 @@ def task_review_details(
     progress = _get_review_progress(db, progress_id, token)
     return {
         "course_title": progress.enrollment.course.title,
-        "lesson_title": progress.module.title,
+        "lesson_title": f"Day {progress.module.order_index}",
         "questions": [
             {
                 "id": question["id"],
@@ -1225,6 +1335,103 @@ def mark_video_completed(
     return {"message": "Video completion verified."}
 
 
+@app.post("/student/day-one/visit")
+def mark_day_one_site_visited(
+    payload: schemas.DayOneVisit,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    _, module = _get_unlocked_student_module(
+        db,
+        current_user,
+        payload.enrollment_id,
+        payload.module_id,
+    )
+    if module.order_index != 1:
+        raise HTTPException(status_code=404, detail="Day 1 website checks not found.")
+
+    progress = _get_or_create_day_one_progress(
+        db,
+        payload.enrollment_id,
+        module.id,
+    )
+    state = _load_day_one_state(progress)
+    if any(
+        not _day_one_site_complete(state, previous_index)
+        for previous_index in range(payload.website_index)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Complete the previous website checks before opening this site.",
+        )
+
+    state["visited"][payload.website_index] = True
+    progress.day_one_state = json.dumps(state)
+    db.commit()
+    return {"day_one": _day_one_payload(progress)}
+
+
+@app.post("/student/day-one/answer")
+def save_day_one_answer(
+    payload: schemas.DayOneAnswer,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    _, module = _get_unlocked_student_module(
+        db,
+        current_user,
+        payload.enrollment_id,
+        payload.module_id,
+    )
+    if module.order_index != 1:
+        raise HTTPException(status_code=404, detail="Day 1 website checks not found.")
+
+    progress = _get_or_create_day_one_progress(
+        db,
+        payload.enrollment_id,
+        module.id,
+    )
+    state = _load_day_one_state(progress)
+    if not state["visited"][payload.website_index]:
+        raise HTTPException(
+            status_code=409,
+            detail="Open the website before answering its checks.",
+        )
+    if any(
+        not _day_one_site_complete(state, previous_index)
+        for previous_index in range(payload.website_index)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Complete the previous website checks before answering this site.",
+        )
+
+    answers = state["answers"][payload.website_index]
+    next_question_index = next(
+        (index for index, answer in enumerate(answers) if answer is None),
+        len(DAY_ONE_QUESTIONS),
+    )
+    if (
+        answers[payload.question_index] is None
+        and payload.question_index != next_question_index
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Answer the previous question before continuing.",
+        )
+
+    answers[payload.question_index] = payload.answer
+    progress.day_one_state = json.dumps(state)
+    if _day_one_complete(progress) and not progress.assignment_completed:
+        completed_at = datetime.datetime.now(timezone.utc)
+        progress.is_video_completed = True
+        progress.video_completed_at = completed_at
+        progress.assignment_completed = True
+        progress.assignment_completed_at = completed_at
+    db.commit()
+    return {"day_one": _day_one_payload(progress)}
+
+
 @app.post("/student/submit-assignment")
 def submit_assignment(
     enrollment_id: str = Form(...),
@@ -1233,7 +1440,14 @@ def submit_assignment(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    _get_unlocked_student_module(db, current_user, enrollment_id, module_id)
+    _, module = _get_unlocked_student_module(
+        db, current_user, enrollment_id, module_id
+    )
+    if module.order_index == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Complete Day 1 using the website checks in the portal.",
+        )
     prog = db.query(models.StudentProgress).filter_by(
         enrollment_id=enrollment_id,
         module_id=module_id
@@ -1245,7 +1459,12 @@ def submit_assignment(
         raise HTTPException(status_code=409, detail="This assignment cannot be submitted again in its current status.")
     submission_text = submission_text.strip()
     if not submission_text:
-        raise HTTPException(status_code=422, detail="Provide a description or link to your completed work.")
+        raise HTTPException(status_code=422, detail="Provide your response in the portal.")
+    if re.search(r"(?:https?://|www\.)", submission_text, re.IGNORECASE):
+        raise HTTPException(
+            status_code=422,
+            detail="External work links are not allowed. Submit your response in the portal.",
+        )
 
     prog.assignment_status = "submitted"
     prog.submission_notes = submission_text
@@ -1282,8 +1501,12 @@ def trainer_dashboard(
                 1 for module in modules
                 if (
                     progress_by_module.get(module.id)
-                    and progress_by_module[module.id].is_video_completed
-                    and progress_by_module[module.id].assignment_completed
+                    and (
+                        _day_one_complete(progress_by_module[module.id])
+                        if module.order_index == 1
+                        else progress_by_module[module.id].is_video_completed
+                        and progress_by_module[module.id].assignment_completed
+                    )
                 )
             )
             module_progress = []
@@ -1291,13 +1514,22 @@ def trainer_dashboard(
                 progress = progress_by_module.get(module.id)
                 module_progress.append({
                     "module_id": module.id,
-                    "title": module.title,
-                    "assignment_status": progress.assignment_status if progress else "not_started",
-                    "is_video_completed": progress.is_video_completed if progress else False,
-                    "assignment_completed": progress.assignment_completed if progress else False,
-                    "assignment_link": (
-                        get_project_assignment_link(module.order_index, e.project_index)
-                    ) or module.assignment_link,
+                    "title": f"Day {module.order_index}",
+                    "assignment_status": (
+                        "completed" if _day_one_complete(progress) else "not_started"
+                    ) if module.order_index == 1 else (
+                        progress.assignment_status if progress else "not_started"
+                    ),
+                    "is_video_completed": (
+                        _day_one_complete(progress)
+                        if module.order_index == 1
+                        else progress.is_video_completed if progress else False
+                    ),
+                    "assignment_completed": (
+                        _day_one_complete(progress)
+                        if module.order_index == 1
+                        else progress.assignment_completed if progress else False
+                    ),
                 })
             student_records.append({
                 "student_id": e.student.id if e.student else None,
@@ -1320,10 +1552,9 @@ def trainer_dashboard(
                 {
                     "module_id": module.id,
                     "order_index": module.order_index,
-                    "title": module.title,
-                    "video_url": module.video_url,
+                    "title": f"Day {module.order_index}",
+                    "video_url": None if module.order_index == 1 else module.video_url,
                     "assignment_prompt": module.assignment_prompt,
-                    "assignment_link": module.assignment_link,
                     "questions": [
                         _lesson_question_payload(question)
                         for question in module.lesson_questions
@@ -1348,7 +1579,7 @@ def create_trainer_course(
 
     order_indexes = [module.order_index for module in payload.modules]
     if len(order_indexes) != len(set(order_indexes)):
-        raise HTTPException(status_code=422, detail="Lesson order numbers must be unique.")
+        raise HTTPException(status_code=422, detail="Day numbers must be unique.")
 
     title = payload.title.strip()
     if not title:
@@ -1364,10 +1595,10 @@ def create_trainer_course(
     for module_payload in sorted(payload.modules, key=lambda module: module.order_index):
         module_title = module_payload.title.strip()
         video_url = module_payload.video_url.strip()
-        if not module_title or not video_url:
+        if not module_title or (not video_url and module_payload.order_index != 1):
             raise HTTPException(
                 status_code=422,
-                detail="Lesson title and video URL cannot be empty.",
+                detail="Day title and video URL cannot be empty.",
             )
         db.add(models.Module(
             id=str(uuid.uuid4()),
@@ -1376,8 +1607,6 @@ def create_trainer_course(
             title=module_title,
             video_url=video_url,
             assignment_prompt=(module_payload.assignment_prompt or "").strip(),
-            assignment_link=module_payload.assignment_link.strip()
-                if module_payload.assignment_link else None,
         ))
     # A new course must NOT auto-enroll existing students.
     # Trainers assign it explicitly via /trainer/assign-course.
@@ -1397,7 +1626,7 @@ def add_trainer_course_module(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     if current_user.role != "trainer":
-        raise HTTPException(status_code=403, detail="Only trainer accounts can add lessons.")
+        raise HTTPException(status_code=403, detail="Only trainer accounts can add days.")
 
     course = db.query(models.Course).filter_by(
         id=course_id,
@@ -1413,15 +1642,15 @@ def add_trainer_course_module(
     if payload.order_index != next_order_index:
         raise HTTPException(
             status_code=422,
-            detail=f"New lesson order must be {next_order_index}.",
+            detail=f"New day order must be {next_order_index}.",
         )
 
     title = payload.title.strip()
     video_url = payload.video_url.strip()
-    if not title or not video_url:
+    if not title or (not video_url and next_order_index != 1):
         raise HTTPException(
             status_code=422,
-            detail="Lesson title and video URL cannot be empty.",
+            detail="Day title and video URL cannot be empty.",
         )
 
     module = models.Module(
@@ -1431,7 +1660,6 @@ def add_trainer_course_module(
         title=title,
         video_url=video_url,
         assignment_prompt=(payload.assignment_prompt or "").strip(),
-        assignment_link=payload.assignment_link.strip() if payload.assignment_link else None,
     )
     db.add(module)
     db.commit()
@@ -1579,16 +1807,8 @@ def pending_assignments(
             "submission_notes": p.submission_notes or "",
             "submitted_at": p.submitted_at.isoformat() if p.submitted_at else None,
             "course_title": p.enrollment.course.title if p.enrollment.course else "Course",
-            "module_title": p.module.title if p.module else "Module",
-            "assignment_link": (
-                (
-                    get_project_assignment_link(
-                        p.module.order_index,
-                        p.enrollment.project_index,
-                    )
-                    if p.module and p.enrollment else None
-                )
-                or (p.module.assignment_link if p.module else None)
+            "module_title": (
+                f"Day {p.module.order_index}" if p.module else "Day"
             ),
             "assignment_prompt": p.module.assignment_prompt if p.module else "",
         }
@@ -1615,28 +1835,10 @@ def trainer_open_assignment_submission(
         )
     if progress.assignment_status != "submitted":
         raise HTTPException(status_code=409, detail="This assignment has not been submitted.")
-
-    match = re.search(r"https?://[^\s<>\"']+", progress.submission_notes or "", re.IGNORECASE)
-    if not match:
-        raise HTTPException(
-            status_code=409,
-            detail="The student has not provided a clickable work link.",
-        )
-    submitted_url = match.group().rstrip(".,;:!?)")
-    url_parts = urlsplit(submitted_url)
-    if (
-        url_parts.scheme.lower() not in {"http", "https"}
-        or not url_parts.hostname
-        or url_parts.username
-        or url_parts.password
-    ):
-        raise HTTPException(status_code=409, detail="The submitted work link is invalid.")
-
-    if not progress.assignment_completed:
-        progress.assignment_completed = True
-        progress.assignment_completed_at = datetime.datetime.now(timezone.utc)
-        db.commit()
-    return {"message": "Submission opened. The student task review QR code is now available."}
+    raise HTTPException(
+        status_code=409,
+        detail="External work links are not supported. Review the student's portal response instead.",
+    )
 
 
 @app.post("/trainer/request-student-deletion", status_code=201)
@@ -1770,6 +1972,11 @@ def evaluate_assignment(
         raise HTTPException(status_code=404, detail="Assignment course not found.")
     if course.trainer_id != current_user.id:
         raise HTTPException(status_code=403, detail="You cannot evaluate assignments for another trainer's course.")
+    if prog.module and prog.module.order_index == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Day 1 is completed through the portal website checks.",
+        )
     if prog.assignment_status != "submitted":
         raise HTTPException(status_code=409, detail="This assignment has already been evaluated.")
 
@@ -1833,9 +2040,14 @@ def admin_student_list(
             module_progress = []
             for module in enrollment.course.modules if enrollment.course else []:
                 progress = progress_by_module.get(module.id)
-                video_completed = bool(progress and progress.is_video_completed)
-                assignment_completed = bool(progress and progress.assignment_completed)
+                if module.order_index == 1:
+                    video_completed = _day_one_complete(progress)
+                    assignment_completed = video_completed
+                else:
+                    video_completed = bool(progress and progress.is_video_completed)
+                    assignment_completed = bool(progress and progress.assignment_completed)
                 module_progress.append({
+                    "title": f"Day {module.order_index}",
                     "module_id": module.id,
                     "is_video_completed": video_completed,
                     "assignment_completed": assignment_completed,
@@ -1989,7 +2201,24 @@ def admin_students_analytics(
         enrollments = db.query(models.Enrollment).filter_by(student_id=s.id).all()
         c_list = []
         for e in enrollments:
-            done = db.query(models.StudentProgress).filter_by(enrollment_id=e.id, is_approved=True).count()
+            progress_by_module = {
+                progress.module_id: progress
+                for progress in db.query(models.StudentProgress).filter_by(
+                    enrollment_id=e.id
+                ).all()
+            }
+            done = sum(
+                1
+                for module in e.course.modules
+                if (
+                    _day_one_complete(progress_by_module.get(module.id))
+                    if module.order_index == 1
+                    else bool(
+                        progress_by_module.get(module.id)
+                        and progress_by_module[module.id].is_approved
+                    )
+                )
+            ) if e.course else 0
             c_list.append({
                 "course_title": e.course.title if e.course else "Course",
                 "completed_slots": done

@@ -127,7 +127,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertEqual(missing_course_response.status_code, 422)
         self.assertEqual(invalid_course_response.status_code, 422)
 
-    def test_enrolled_students_receive_projects_in_a_repeating_sequence(self):
+    def test_internship_days_do_not_expose_external_assignment_links(self):
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         course_id = str(uuid.uuid4())
@@ -150,9 +150,9 @@ class TestLMSAPI(unittest.TestCase):
                 id=module_id,
                 course_id=course_id,
                 order_index=1,
-                title="Project Lesson",
+                title="Day 1",
                 video_url="https://example.com/lesson",
-                assignment_prompt="Complete your assigned project",
+                assignment_prompt="This legacy prompt is not shown for Day 1.",
             )
             for student_index in range(12):
                 student_id = str(uuid.uuid4())
@@ -172,21 +172,10 @@ class TestLMSAPI(unittest.TestCase):
                 main._enroll_student_in_course(db, student, course)
             db.commit()
 
-            enrollments = db.query(main.models.Enrollment).filter_by(
-                course_id=course_id,
-            ).all()
-            project_indexes_by_student = {
-                enrollment.student_id: enrollment.project_index
-                for enrollment in enrollments
-            }
             self.assertEqual(
-                [project_indexes_by_student[student.id] for student in students],
-                [
-                    index % 10
-                    for index in range(12)
-                ],
+                db.query(main.models.Enrollment).filter_by(course_id=course_id).count(),
+                12,
             )
-
             token = auth.create_access_token({
                 "sub": students[0].id,
                 "role": "student",
@@ -196,29 +185,181 @@ class TestLMSAPI(unittest.TestCase):
                 headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(dashboard_response.status_code, 200)
-            self.assertEqual(
-                dashboard_response.json()["courses"][0]["modules"][0]["assignment_link"],
-                main.get_project_assignment_link(1, 0),
+            module = dashboard_response.json()["courses"][0]["modules"][0]
+            self.assertEqual(module["title"], "Day 1")
+            self.assertEqual(module["assignment_prompt"], "Complete the website checks for each site.")
+            self.assertIsNone(module["video_url"])
+            self.assertNotIn("assignment_link", module)
+            self.assertEqual(len(module["day_one"]["websites"]), 5)
+            self.assertEqual(len(module["day_one"]["questions"]), 9)
+        finally:
+            db.close()
+
+    def test_day_one_checks_unlock_sequentially_and_start_day_two_cooldown(self):
+        db = self.testing_session_local()
+        trainer_id = str(uuid.uuid4())
+        student_id = str(uuid.uuid4())
+        course_id = str(uuid.uuid4())
+        enrollment_id = str(uuid.uuid4())
+        day_one_id = str(uuid.uuid4())
+        day_two_id = str(uuid.uuid4())
+        try:
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Day Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
             )
-            self.assertEqual(
-                dashboard_response.json()["courses"][0]["modules"][0]["assignment_prompt"],
-                "Complete your assigned project",
+            student = main.models.User(
+                id=student_id,
+                name="Day Student",
+                email=f"{student_id}@example.com",
+                role="student",
+                is_access_granted=True,
             )
-            for lesson_order in range(1, 13):
-                lesson_links = [
-                    main.get_project_assignment_link(lesson_order, index)
-                    for index in range(10)
-                ]
-                self.assertEqual(len(set(lesson_links)), 10)
-            all_task_links = {
-                main.get_project_assignment_link(lesson_order, project_index)
-                for lesson_order in range(1, 13)
-                for project_index in range(10)
+            course = main.models.Course(
+                id=course_id,
+                title="Internship Course",
+                trainer_id=trainer_id,
+            )
+            enrollment = main.models.Enrollment(
+                id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+            )
+            day_one = main.models.Module(
+                id=day_one_id,
+                course_id=course_id,
+                order_index=1,
+                title="Day 1",
+                video_url="",
+                assignment_prompt="Website checks",
+            )
+            day_two = main.models.Module(
+                id=day_two_id,
+                course_id=course_id,
+                order_index=2,
+                title="Day 2",
+                video_url="https://example.com/day-2",
+                assignment_prompt="Day 2 task",
+            )
+            db.add_all([trainer, student, course, enrollment, day_one, day_two])
+            db.commit()
+            headers = {
+                "Authorization": f"******",
             }
-            self.assertEqual(len(all_task_links), 120)
-            self.assertNotIn(
-                "project_link",
-                dashboard_response.json()["courses"][0]["modules"][0],
+            token = auth.create_access_token({
+                "sub": student_id,
+                "role": "student",
+            })
+            headers = {"Authorization": f"Bearer {token}"}
+
+            initial_dashboard = self.client.get(
+                "/student/dashboard",
+                headers=headers,
+            )
+            initial_modules = initial_dashboard.json()["courses"][0]["modules"]
+            self.assertEqual(initial_modules[0]["title"], "Day 1")
+            self.assertFalse(initial_modules[0]["is_video_completed"])
+            self.assertFalse(initial_modules[1]["is_unlocked"])
+            self.assertNotIn("assignment_link", initial_modules[0])
+
+            base_payload = {
+                "enrollment_id": enrollment_id,
+                "module_id": day_one_id,
+            }
+            answer_before_visit = self.client.post(
+                "/student/day-one/answer",
+                json={
+                    **base_payload,
+                    "website_index": 0,
+                    "question_index": 0,
+                    "answer": "yes",
+                },
+                headers=headers,
+            )
+            skipped_website = self.client.post(
+                "/student/day-one/visit",
+                json={**base_payload, "website_index": 1},
+                headers=headers,
+            )
+            self.assertEqual(answer_before_visit.status_code, 409)
+            self.assertEqual(skipped_website.status_code, 409)
+
+            for website_index in range(5):
+                visit_response = self.client.post(
+                    "/student/day-one/visit",
+                    json={**base_payload, "website_index": website_index},
+                    headers=headers,
+                )
+                self.assertEqual(visit_response.status_code, 200, visit_response.text)
+
+                if website_index == 0:
+                    skipped_question = self.client.post(
+                        "/student/day-one/answer",
+                        json={
+                            **base_payload,
+                            "website_index": website_index,
+                            "question_index": 1,
+                            "answer": "yes",
+                        },
+                        headers=headers,
+                    )
+                    self.assertEqual(skipped_question.status_code, 409)
+
+                for question_index in range(9):
+                    answer_response = self.client.post(
+                        "/student/day-one/answer",
+                        json={
+                            **base_payload,
+                            "website_index": website_index,
+                            "question_index": question_index,
+                            "answer": "yes",
+                        },
+                        headers=headers,
+                    )
+                    self.assertEqual(
+                        answer_response.status_code,
+                        200,
+                        answer_response.text,
+                    )
+
+            db.expire_all()
+            progress = db.query(main.models.StudentProgress).filter_by(
+                enrollment_id=enrollment_id,
+                module_id=day_one_id,
+            ).one()
+            self.assertTrue(main._day_one_complete(progress))
+            self.assertTrue(progress.is_video_completed)
+            self.assertTrue(progress.assignment_completed)
+            self.assertIsNotNone(progress.assignment_completed_at)
+
+            completed_dashboard = self.client.get(
+                "/student/dashboard",
+                headers=headers,
+            )
+            completed_modules = completed_dashboard.json()["courses"][0]["modules"]
+            self.assertTrue(completed_modules[0]["day_one"]["complete"])
+            self.assertFalse(completed_modules[1]["is_unlocked"])
+            self.assertIn("24h cooldown", completed_modules[1]["lock_reason"])
+
+            locked_day_attempt = self.client.post(
+                f"/student/complete-video/{enrollment_id}/{day_two_id}",
+                headers=headers,
+            )
+            self.assertEqual(locked_day_attempt.status_code, 403)
+
+            progress.assignment_completed_at = (
+                datetime.datetime.now(datetime.timezone.utc)
+                - datetime.timedelta(hours=25)
+            ).replace(tzinfo=None)
+            db.commit()
+            unlocked_dashboard = self.client.get(
+                "/student/dashboard",
+                headers=headers,
+            )
+            self.assertTrue(
+                unlocked_dashboard.json()["courses"][0]["modules"][1]["is_unlocked"]
             )
         finally:
             db.close()
@@ -263,7 +404,6 @@ class TestLMSAPI(unittest.TestCase):
                 id=enrollment_id,
                 student_id=student_id,
                 course_id=course_id,
-                project_index=0,
             )
             intro_progress = main.models.StudentProgress(
                 id=str(uuid.uuid4()),
@@ -274,6 +414,10 @@ class TestLMSAPI(unittest.TestCase):
                 assignment_completed_at=datetime.datetime.now(
                     datetime.timezone.utc
                 ) - datetime.timedelta(hours=23),
+                day_one_state=json.dumps({
+                    "visited": [True] * 5,
+                    "answers": [["yes"] * 9 for _ in range(5)],
+                }),
             )
             task_progress = main.models.StudentProgress(
                 id=str(uuid.uuid4()),
@@ -346,8 +490,8 @@ class TestLMSAPI(unittest.TestCase):
             module = main.models.Module(
                 id=module_id,
                 course_id=course_id,
-                order_index=1,
-                title="Task Lesson",
+                order_index=2,
+                title="Day 2",
                 video_url="https://example.com/task-video",
                 assignment_prompt="Complete this task.",
             )
@@ -355,7 +499,6 @@ class TestLMSAPI(unittest.TestCase):
                 id=enrollment_id,
                 student_id=student_id,
                 course_id=course_id,
-                project_index=0,
             )
             progress = main.models.StudentProgress(
                 id=progress_id,
@@ -390,7 +533,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(page_response.status_code, 200)
             self.assertIn("Task Reflection", page_response.text)
             self.assertEqual(details_response.status_code, 200)
-            self.assertEqual(details_response.json()["lesson_title"], "Task Lesson")
+            self.assertEqual(details_response.json()["lesson_title"], "Day 2")
             answers = {
                 question["id"]: question["options"][0]["value"]
                 for question in details_response.json()["questions"]
@@ -1159,7 +1302,7 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
-    def test_student_cannot_complete_or_submit_locked_lesson(self):
+    def test_student_cannot_bypass_day_one_or_complete_a_locked_day(self):
         db = self.testing_session_local()
         try:
             trainer_id = str(uuid.uuid4())
@@ -1199,7 +1342,6 @@ class TestLMSAPI(unittest.TestCase):
                 title="First lesson",
                 video_url="https://example.com/first.mp4",
                 assignment_prompt="Complete the task.",
-                assignment_link="https://example.com/first-assignment",
             )
             locked_module = main.models.Module(
                 id=locked_module_id,
@@ -1208,7 +1350,6 @@ class TestLMSAPI(unittest.TestCase):
                 title="Locked lesson",
                 video_url="https://example.com/locked.mp4",
                 assignment_prompt="Complete the task.",
-                assignment_link="https://example.com/locked-assignment",
             )
             task_module = main.models.Module(
                 id=str(uuid.uuid4()),
@@ -1270,18 +1411,18 @@ class TestLMSAPI(unittest.TestCase):
             )
 
             self.assertEqual(dashboard_response.status_code, 200)
-            self.assertEqual(dashboard_modules[0]["video_url"], "https://example.com/first.mp4")
+            self.assertIsNone(dashboard_modules[0]["video_url"])
             self.assertIsNone(dashboard_modules[1]["video_url"])
-            self.assertIsNone(dashboard_modules[1]["assignment_link"])
-            self.assertEqual(incomplete_assignment_response.status_code, 400)
+            self.assertNotIn("assignment_link", dashboard_modules[1])
+            self.assertEqual(incomplete_assignment_response.status_code, 409)
             self.assertEqual(available_video_response.status_code, 200)
-            self.assertEqual(assignment_submission_response.status_code, 200)
+            self.assertEqual(assignment_submission_response.status_code, 409)
             self.assertEqual(video_response.status_code, 403)
             self.assertEqual(assignment_response.status_code, 403)
         finally:
             db.close()
 
-    def test_assignment_submission_and_qr_trigger_require_trainer_link_open(self):
+    def test_portal_assignment_submission_rejects_external_work_links(self):
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
@@ -1319,7 +1460,6 @@ class TestLMSAPI(unittest.TestCase):
                 title="Lesson",
                 video_url="https://example.com/video.mp4",
                 assignment_prompt="Complete the task.",
-                assignment_link="https://example.com/assignment",
             )
             progress = main.models.StudentProgress(
                 id=str(uuid.uuid4()),
@@ -1336,8 +1476,16 @@ class TestLMSAPI(unittest.TestCase):
             submit_payload = {
                 "enrollment_id": enrollment_id,
                 "module_id": module_id,
-                "submission_text": "https://example.com/my-work",
+                "submission_text": "Completed the assignment in the portal.",
             }
+            external_link_response = self.client.post(
+                "/student/submit-assignment",
+                data={
+                    **submit_payload,
+                    "submission_text": "https://example.com/my-work",
+                },
+                headers=student_headers,
+            )
             blank_submission_response = self.client.post(
                 "/student/submit-assignment",
                 data={**submit_payload, "submission_text": "   "},
@@ -1380,6 +1528,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(invalid_signature_response.status_code, 401)
             self.assertEqual(submit_response.status_code, 200)
             self.assertEqual(blank_submission_response.status_code, 422)
+            self.assertEqual(external_link_response.status_code, 422)
             waiting_module = waiting_dashboard.json()["courses"][0]["modules"][0]
             self.assertFalse(waiting_module["assignment_completed"])
             self.assertFalse(waiting_module["review_available"])
@@ -1395,12 +1544,11 @@ class TestLMSAPI(unittest.TestCase):
                 headers=trainer_headers,
             )
             pending_assignment = pending_response.json()[0]
-            self.assertEqual(pending_assignment["submission_notes"], "https://example.com/my-work")
             self.assertEqual(
-                pending_assignment["assignment_link"],
-                main.get_project_assignment_link(2, None)
-                or "https://example.com/assignment",
+                pending_assignment["submission_notes"],
+                "Completed the assignment in the portal.",
             )
+            self.assertNotIn("assignment_link", pending_assignment)
             self.assertEqual(pending_assignment["student_email"], student.email)
             student_open_submission_response = self.client.post(
                 f"/trainer/assignments/{progress.id}/open-submission",
@@ -1410,24 +1558,15 @@ class TestLMSAPI(unittest.TestCase):
                 f"/trainer/assignments/{progress.id}/open-submission",
                 headers=trainer_headers,
             )
-            after_open_dashboard = self.client.get(
-                "/student/dashboard",
-                headers=student_headers,
-            )
             qr_response = self.client.get(
                 f"/student/enrollments/{enrollment_id}/modules/{module_id}/review-qr",
                 headers=student_headers,
             )
             self.assertEqual(student_open_submission_response.status_code, 403)
-            self.assertEqual(open_submission_response.status_code, 200)
-            self.assertTrue(
-                after_open_dashboard.json()["courses"][0]["modules"][0]["review_available"]
-            )
-            self.assertEqual(qr_response.status_code, 200)
-            self.assertTrue(qr_response.json()["qr_code"])
+            self.assertEqual(open_submission_response.status_code, 409)
+            self.assertEqual(qr_response.status_code, 409)
             db.refresh(progress)
-            self.assertTrue(progress.assignment_completed)
-            self.assertIsNotNone(progress.assignment_completed_at)
+            self.assertFalse(progress.assignment_completed)
 
             rejected_response = self.client.post(
                 "/trainer/evaluate-assignment",
@@ -1442,7 +1581,7 @@ class TestLMSAPI(unittest.TestCase):
                 "/student/submit-assignment",
                 data={
                     **submit_payload,
-                    "submission_text": "Updated work: https://example.com/my-work",
+                    "submission_text": "Updated response in the portal.",
                 },
                 headers=student_headers,
             )
@@ -1452,7 +1591,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(updated_submission_response.status_code, 200)
             self.assertEqual(
                 progress.submission_notes,
-                "Updated work: https://example.com/my-work",
+                "Updated response in the portal.",
             )
             self.assertEqual(progress.assignment_status, "submitted")
             self.assertFalse(progress.assignment_completed)
@@ -1461,11 +1600,8 @@ class TestLMSAPI(unittest.TestCase):
                 headers=trainer_headers,
             )
             db.refresh(progress)
-            self.assertEqual(reopened_submission_response.status_code, 200)
-            self.assertTrue(progress.assignment_completed)
-            progress.assignment_completed = False
-            progress.assignment_completed_at = None
-            db.commit()
+            self.assertEqual(reopened_submission_response.status_code, 409)
+            self.assertFalse(progress.assignment_completed)
             approval_response = self.client.post(
                 "/trainer/evaluate-assignment",
                 json={
@@ -1514,7 +1650,7 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
-    def test_trainer_can_create_course_with_lessons(self):
+    def test_trainer_can_create_course_with_days_and_no_external_assignments(self):
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
@@ -1562,7 +1698,7 @@ class TestLMSAPI(unittest.TestCase):
                     {
                         "order_index": 1,
                         "title": "First lesson",
-                        "video_url": "https://example.com/lesson-1.mp4",
+                        "video_url": "",
                         "assignment_prompt": "Complete the API exercise",
                         "assignment_link": "https://example.com/exercise",
                     },
@@ -1606,11 +1742,15 @@ class TestLMSAPI(unittest.TestCase):
             approved_progress = main.models.StudentProgress(
                 id=str(uuid.uuid4()),
                 enrollment_id=enrollment.id,
-                module_id=course.modules[0].id,
+                module_id=course.modules[1].id,
                 is_video_completed=True,
                 assignment_completed=True,
                 assignment_status="approved",
                 is_approved=True,
+                day_one_state=json.dumps({
+                    "visited": [True] * 5,
+                    "answers": [["yes"] * 9 for _ in range(5)],
+                }),
             )
             db.add(approved_progress)
             db.commit()
@@ -1704,9 +1844,12 @@ class TestLMSAPI(unittest.TestCase):
                 [1, 2, 3, 4],
             )
             self.assertEqual(course.modules[3].assignment_prompt, "")
-            self.assertEqual(
-                course.modules[0].assignment_link,
-                "https://example.com/exercise",
+            self.assertNotIn(
+                "assignment_link",
+                next(
+                    item for item in dashboard_response.json()["courses"]
+                    if item["id"] == course.id
+                )["modules"][0],
             )
             self.assertEqual(course.modules[1].assignment_prompt, "")
             self.assertEqual(dashboard_response.status_code, 200)
@@ -2390,8 +2533,8 @@ class TestLMSAPI(unittest.TestCase):
             module = main.models.Module(
                 id=module_id,
                 course_id=course_id,
-                order_index=1,
-                title="Lesson",
+                order_index=2,
+                title="Day 2",
                 video_url="https://example.com/video.mp4",
                 assignment_prompt="Complete the task.",
             )
