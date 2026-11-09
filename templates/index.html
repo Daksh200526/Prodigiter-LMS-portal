@@ -311,6 +311,46 @@
       border-radius: 8px;
       padding: 1.5rem;
     }
+    .internship-planner {
+      margin-bottom: 1.5rem;
+    }
+    .internship-planner h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.4rem;
+    }
+    .internship-planner-intro {
+      margin: 0 0 1rem;
+      color: var(--text-muted);
+    }
+    .internship-planner-list {
+      display: grid;
+      gap: 0.65rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .internship-planner-day {
+      display: grid;
+      grid-template-columns: 5rem minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+      padding: 0.85rem 1rem;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .internship-planner-day-label {
+      color: var(--link);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .internship-planner-day p {
+      margin: 0;
+      line-height: 1.5;
+    }
+    .internship-planner-day p + p {
+      margin-top: 0.35rem;
+    }
     .video-container {
       position: relative;
       padding-bottom: 56.25%;
@@ -747,6 +787,10 @@
       .video-workspace {
         padding: 1rem;
       }
+      .internship-planner-day {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+      }
     }
   </style>
 </head>
@@ -914,6 +958,64 @@
 
     <!-- Main Workspace -->
     <div class="video-workspace">
+      <section class="internship-planner" aria-labelledby="internship-planner-title">
+        <h2 id="internship-planner-title">12 Days Internship Planner</h2>
+        <p class="internship-planner-intro">A day-by-day guide to your internship projects and final review.</p>
+        <ol class="internship-planner-list">
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 1</span>
+            <p>What is GMB? Visit all the provided websites and verify that each one is running correctly.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 2</span>
+            <p>Project 1: Check the existing ranking for the given keywords and perform competitor analysis.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 3</span>
+            <p>Project 1: Create the post (image, content, and CTA) and review it.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 4</span>
+            <p>Project 2: Check the existing ranking for the given keywords and perform competitor analysis.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 5</span>
+            <p>Project 2: Create the post (image, content, and CTA) and review it.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 6</span>
+            <p>Project 3: Check the existing ranking for the given keywords and perform competitor analysis.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 7</span>
+            <p>Project 3: Create the post (image, content, and CTA) and review it.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 8</span>
+            <p>Project 4: Check the existing ranking for the given keywords and perform competitor analysis.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 9</span>
+            <p>Project 4: Create the post (image, content, and CTA) and review it.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 10</span>
+            <p>Project 5: Check the existing ranking for the given keywords and perform competitor analysis.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 11</span>
+            <p>Project 5: Create the post (image, content, and CTA) and review it.</p>
+          </li>
+          <li class="internship-planner-day">
+            <span class="internship-planner-day-label">Day 12</span>
+            <div>
+              <p>Check the ranking position for the keywords of all projects.</p>
+              <p>Visit the office to collect your certificate and stipend.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
       <div id="video-content-pane">
         <div style="display:flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
           <h3 id="current-lesson-title" style="margin: 0;">Select a Lesson</h3>
