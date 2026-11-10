@@ -323,6 +323,10 @@ class TestLMSAPI(unittest.TestCase):
                         200,
                         answer_response.text,
                     )
+                    if website_index == 0 and question_index == 0:
+                        self.assertTrue(
+                            answer_response.json()["day_one"]["websites"][0]["visited"]
+                        )
 
             db.expire_all()
             progress = db.query(main.models.StudentProgress).filter_by(

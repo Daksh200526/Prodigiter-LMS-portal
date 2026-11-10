@@ -968,6 +968,18 @@
     <!-- Main Workspace -->
     <div class="video-workspace">
       <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
+      <section id="day-one-video" class="hidden" aria-label="Day 1 video">
+        <p class="day-one-notice">Temporary video - replace this video later.</p>
+        <div class="video-container">
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ"
+            title="Temporary Day 1 video"
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen></iframe>
+        </div>
+      </section>
       <div id="day-one-checklist" class="hidden"></div>
 
       <div id="video-content-pane">
@@ -1991,6 +2003,8 @@
       selectLesson(selectedModule.module_id);
     } else {
       document.getElementById('video-content-pane').classList.add('hidden');
+      document.getElementById('day-one-video').classList.add('hidden');
+      document.getElementById('day-one-checklist').classList.add('hidden');
       document.getElementById('student-no-unlocked-lessons').classList.remove('hidden');
     }
   }
@@ -2013,13 +2027,16 @@
     }
 
     const dayOnePane = document.getElementById('day-one-checklist');
+    const dayOneVideo = document.getElementById('day-one-video');
     const videoPane = document.getElementById('video-content-pane');
     if (mod.order_index === 1 && mod.day_one) {
       videoPane.classList.add('hidden');
+      dayOneVideo.classList.remove('hidden');
       dayOnePane.classList.remove('hidden');
       renderDayOneChecklist(mod);
       return;
     }
+    dayOneVideo.classList.add('hidden');
     dayOnePane.classList.add('hidden');
     videoPane.classList.remove('hidden');
 
