@@ -290,7 +290,6 @@
       cursor: pointer;
       transition: background 0.15s;
     }
-    #lessons-list,
     .day-one-website-tabs,
     .day-one-question-tabs,
     .daily-task-tabs {
@@ -302,10 +301,19 @@
       border-bottom: 1px solid var(--border);
       scrollbar-width: thin;
     }
+    #lessons-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      max-height: 55vh;
+      overflow-y: auto;
+      padding: 0.5rem;
+      border-top: 1px solid var(--border);
+      scrollbar-width: thin;
+    }
     #lessons-list .lesson-item,
     .day-one-step-tab {
       flex: 0 0 auto;
-      min-width: 7rem;
       padding: 0.65rem 0.8rem;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -313,6 +321,11 @@
       color: var(--text);
       font: inherit;
       text-align: left;
+    }
+    #lessons-list .lesson-item {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .lesson-item:hover {
       background: var(--surface-hover);
@@ -964,11 +977,11 @@
         <select id="student-course-select" aria-label="Choose a course">
         </select>
       </div>
+      <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
     </div>
 
     <!-- Main Workspace -->
     <div class="video-workspace">
-      <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
       <section id="day-one-video" class="hidden" aria-label="Day 1 video">
         <p class="day-one-notice">Temporary video - replace this video later.</p>
         <div class="video-container">
