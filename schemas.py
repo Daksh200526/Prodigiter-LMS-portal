@@ -24,7 +24,7 @@ class PasswordReset(BaseModel):
     new_password: str = Field(min_length=8, max_length=1024)
 
 class ModuleCreate(BaseModel):
-    order_index: int = Field(ge=1)
+    order_index: int = Field(ge=1, le=12)
     title: str = Field(min_length=1, max_length=255)
     video_url: str = Field(default="", max_length=500)
     assignment_prompt: Optional[str] = None
@@ -68,6 +68,36 @@ class DayOneAnswer(BaseModel):
     website_index: int = Field(ge=0, le=4)
     question_index: int = Field(ge=0, le=8)
     answer: Literal["yes", "no", "not_applicable"]
+
+class DailyCompetitorDetails(BaseModel):
+    business_name: str = Field(min_length=1, max_length=255)
+    address: str = Field(min_length=1, max_length=1000)
+    contact_number: str = Field(min_length=1, max_length=100)
+    business_category: str = Field(min_length=1, max_length=255)
+    website_url: str = Field(min_length=1, max_length=1000)
+    reviews: str = Field(min_length=1, max_length=255)
+    rating: str = Field(min_length=1, max_length=100)
+    photo_count: str = Field(min_length=1, max_length=100)
+
+class DailyCompetitorProfile(DailyCompetitorDetails):
+    profile_type: Literal["business", "competitor"]
+
+class DailySocialPost(BaseModel):
+    image_description: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1, max_length=4000)
+    cta: str = Field(min_length=1, max_length=500)
+
+class DailyTaskSubmission(BaseModel):
+    enrollment_id: str
+    module_id: str
+    task: Literal["rankings", "competitor", "posts"]
+    rankings: Optional[List[str]] = Field(default=None, min_length=14, max_length=14)
+    competitor_profiles: Optional[List[DailyCompetitorProfile]] = Field(
+        default=None,
+        min_length=2,
+        max_length=10,
+    )
+    posts: Optional[List[DailySocialPost]] = Field(default=None, min_length=3, max_length=3)
 
 class DeletionProcess(BaseModel):
     request_id: str

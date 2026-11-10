@@ -135,6 +135,7 @@ class StudentProgress(Base):
     generated_review = Column(Text, nullable=True)
     review_generated_at = Column(DateTime, nullable=True)
     day_one_state = Column(Text, nullable=True)
+    daily_task_state = Column(Text, nullable=True)
 
     assignment_status = Column(String(30), default=AssignmentStatus.NOT_STARTED.value)
     is_approved = Column(Boolean, default=False)

@@ -368,6 +368,221 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
+    def test_daily_tasks_are_sequential_and_unlock_the_review_qr(self):
+        db = self.testing_session_local()
+        trainer_id = str(uuid.uuid4())
+        student_id = str(uuid.uuid4())
+        course_id = str(uuid.uuid4())
+        enrollment_id = str(uuid.uuid4())
+        day_two_id = str(uuid.uuid4())
+        day_three_id = str(uuid.uuid4())
+        try:
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Task Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            student = main.models.User(
+                id=student_id,
+                name="Task Student",
+                email=f"{student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            course = main.models.Course(
+                id=course_id,
+                title="Daily Task Course",
+                trainer_id=trainer_id,
+            )
+            enrollment = main.models.Enrollment(
+                id=enrollment_id,
+                student_id=student_id,
+                course_id=course_id,
+            )
+            day_two = main.models.Module(
+                id=day_two_id,
+                course_id=course_id,
+                order_index=2,
+                title="Day 2",
+                video_url="",
+                assignment_prompt="",
+            )
+            day_three = main.models.Module(
+                id=day_three_id,
+                course_id=course_id,
+                order_index=3,
+                title="Day 3",
+                video_url="",
+                assignment_prompt="",
+            )
+            db.add_all([trainer, student, course, enrollment, day_two, day_three])
+            db.commit()
+            token = auth.create_access_token({
+                "sub": student_id,
+                "role": "student",
+            })
+            headers = {
+                "Authorization": f"Bearer {token}",
+            }
+            base_payload = {
+                "enrollment_id": enrollment_id,
+                "module_id": day_two_id,
+            }
+
+            initial_dashboard = self.client.get("/student/dashboard", headers=headers)
+            day_two_data = initial_dashboard.json()["courses"][0]["modules"][0]
+            self.assertEqual(len(day_two_data["daily_task"]["keywords"]), 14)
+
+            free_text_bypass = self.client.post(
+                "/student/submit-assignment",
+                data={
+                    **base_payload,
+                    "submission_text": "Skip the structured portal tasks",
+                },
+                headers=headers,
+            )
+            self.assertEqual(free_text_bypass.status_code, 409)
+
+            competitor_before_rankings = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "competitor",
+                    "competitor_profiles": [
+                        {
+                            "profile_type": "business",
+                            "business_name": "Example Dental",
+                            "address": "Vasanth Nagar",
+                            "contact_number": "1234567890",
+                            "business_category": "Dentist",
+                            "website_url": "https://example.com",
+                            "reviews": "20",
+                            "rating": "4.5",
+                            "photo_count": "10",
+                        },
+                        {
+                            "profile_type": "competitor",
+                            "business_name": "Competitor Dental",
+                            "address": "Vasanth Nagar",
+                            "contact_number": "1234567891",
+                            "business_category": "Dentist",
+                            "website_url": "https://competitor.example.com",
+                            "reviews": "30",
+                            "rating": "4.2",
+                            "photo_count": "12",
+                        },
+                    ],
+                },
+                headers=headers,
+            )
+            self.assertEqual(competitor_before_rankings.status_code, 409)
+
+            rankings_response = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "rankings",
+                    "rankings": ["Not found"] * 14,
+                },
+                headers=headers,
+            )
+            self.assertEqual(rankings_response.status_code, 200, rankings_response.text)
+            self.assertFalse(rankings_response.json()["daily_task"]["complete"])
+
+            posts_before_competitor = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "posts",
+                    "posts": [
+                        {
+                            "image_description": f"Image prompt {index}",
+                            "content": f"Post content {index}",
+                            "cta": f"Call to action {index}",
+                        }
+                        for index in range(1, 4)
+                    ],
+                },
+                headers=headers,
+            )
+            self.assertEqual(posts_before_competitor.status_code, 409)
+
+            review_before_completion = self.client.get(
+                f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
+                headers=headers,
+            )
+            self.assertEqual(review_before_completion.status_code, 409)
+
+            competitor_response = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "competitor",
+                    "competitor_profiles": [
+                        {
+                            "profile_type": "business",
+                            "business_name": "Example Dental",
+                            "address": "Vasanth Nagar",
+                            "contact_number": "1234567890",
+                            "business_category": "Dentist",
+                            "website_url": "https://example.com",
+                            "reviews": "20",
+                            "rating": "4.5",
+                            "photo_count": "10",
+                        },
+                        {
+                            "profile_type": "competitor",
+                            "business_name": "Competitor Dental",
+                            "address": "Vasanth Nagar",
+                            "contact_number": "1234567891",
+                            "business_category": "Dentist",
+                            "website_url": "https://competitor.example.com",
+                            "reviews": "30",
+                            "rating": "4.2",
+                            "photo_count": "12",
+                        },
+                    ],
+                },
+                headers=headers,
+            )
+            self.assertEqual(competitor_response.status_code, 200, competitor_response.text)
+
+            posts_response = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "posts",
+                    "posts": [
+                        {
+                            "image_description": f"Image prompt {index}",
+                            "content": f"Post content {index}",
+                            "cta": f"Call to action {index}",
+                        }
+                        for index in range(1, 4)
+                    ],
+                },
+                headers=headers,
+            )
+            self.assertEqual(posts_response.status_code, 200, posts_response.text)
+            self.assertTrue(posts_response.json()["daily_task"]["complete"])
+
+            qr_response = self.client.get(
+                f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
+                headers=headers,
+            )
+            self.assertEqual(qr_response.status_code, 200, qr_response.text)
+            self.assertTrue(qr_response.json()["qr_code"])
+
+            completed_dashboard = self.client.get("/student/dashboard", headers=headers)
+            completed_modules = completed_dashboard.json()["courses"][0]["modules"]
+            self.assertTrue(completed_modules[0]["assignment_completed"])
+            self.assertTrue(completed_modules[0]["review_available"])
+            self.assertFalse(completed_modules[1]["is_unlocked"])
+            self.assertIn("24h cooldown", completed_modules[1]["lock_reason"])
+        finally:
+            db.close()
+
     def test_assignment_completion_starts_24_hour_unlock_timer(self):
         db = self.testing_session_local()
         try:
@@ -1460,8 +1675,8 @@ class TestLMSAPI(unittest.TestCase):
             module = main.models.Module(
                 id=module_id,
                 course_id=course_id,
-                order_index=2,
-                title="Lesson",
+                order_index=13,
+                title="Day 13",
                 video_url="https://example.com/video.mp4",
                 assignment_prompt="Complete the task.",
             )
@@ -1714,9 +1929,14 @@ class TestLMSAPI(unittest.TestCase):
                 headers=headers,
             )
             self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(response.json()["module_count"], 12)
             course = db.query(main.models.Course).filter_by(
                 id=response.json()["course_id"]
             ).one()
+            self.assertEqual(
+                db.query(main.models.Module).filter_by(course_id=course.id).count(),
+                12,
+            )
             self.assertIsNone(db.query(main.models.Enrollment).filter_by(
                 student_id=student_id,
                 course_id=course.id,
@@ -1845,9 +2065,9 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(course.trainer_id, trainer_id)
             self.assertEqual(
                 [module.order_index for module in course.modules],
-                [1, 2, 3, 4],
+                list(range(1, 13)),
             )
-            self.assertEqual(course.modules[3].assignment_prompt, "")
+            self.assertIn("keyword rankings", course.modules[3].assignment_prompt)
             self.assertNotIn(
                 "assignment_link",
                 next(
@@ -1855,29 +2075,28 @@ class TestLMSAPI(unittest.TestCase):
                     if item["id"] == course.id
                 )["modules"][0],
             )
-            self.assertEqual(course.modules[1].assignment_prompt, "")
+            self.assertIn("keyword rankings", course.modules[1].assignment_prompt)
             self.assertEqual(dashboard_response.status_code, 200)
             dashboard_course = next(
                 item for item in dashboard_response.json()["courses"]
                 if item["id"] == course.id
             )
             self.assertGreaterEqual(dashboard_course["total_enrolled"], 1)
-            self.assertEqual(len(dashboard_course["modules"]), 2)
+            self.assertEqual(len(dashboard_course["modules"]), 12)
             course_student = next(
                 student for student in dashboard_course["students"]
                 if student["student_id"] == student_id
             )
-            self.assertEqual(course_student["progress_percent"], 50)
+            self.assertEqual(course_student["progress_percent"], 8)
             self.assertEqual(course_student["completed_slots"], 1)
             self.assertEqual(duplicate_order_response.status_code, 422)
-            self.assertEqual(added_lesson_response.status_code, 201)
-            self.assertEqual(added_lesson_without_prompt.status_code, 201)
-            self.assertEqual(added_lesson_response.json()["order_index"], 3)
-            self.assertEqual(invalid_order_response.status_code, 422)
+            self.assertEqual(added_lesson_response.status_code, 409)
+            self.assertEqual(added_lesson_without_prompt.status_code, 409)
+            self.assertEqual(invalid_order_response.status_code, 409)
             self.assertEqual(unauthorized_course_response.status_code, 404)
             self.assertEqual(
                 db.query(main.models.Module).filter_by(course_id=course.id).count(),
-                4,
+                12,
             )
         finally:
             db.close()

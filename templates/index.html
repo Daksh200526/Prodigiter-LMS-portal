@@ -292,7 +292,8 @@
     }
     #lessons-list,
     .day-one-website-tabs,
-    .day-one-question-tabs {
+    .day-one-question-tabs,
+    .daily-task-tabs {
       display: flex;
       gap: 0.5rem;
       overflow-x: auto;
@@ -976,14 +977,15 @@
             title="Temporary Day 1 video"
             loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen></iframe>
         </div>
       </section>
       <div id="day-one-checklist" class="hidden"></div>
+      <div id="daily-task-checklist" class="hidden"></div>
 
       <div id="video-content-pane">
-        <div style="display:flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
+        <div id="day-video-header" style="display:flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem;">
           <h3 id="current-lesson-title" style="margin: 0;">Select a Day</h3>
           <span id="video-status-badge" class="badge badge-neutral">Status: Unwatched</span>
         </div>
@@ -992,7 +994,7 @@
           <!-- Dynamic Video/Embed inserted here -->
         </div>
 
-        <section class="assignment-card" aria-labelledby="lesson-questions-heading">
+        <section id="lesson-community-card" class="assignment-card" aria-labelledby="lesson-questions-heading">
           <div class="lesson-community-tabs" role="tablist" aria-label="Day community">
             <button id="lesson-qa-tab" class="lesson-community-tab active" type="button" role="tab"
               aria-selected="true" aria-controls="lesson-qa-panel"
@@ -1036,8 +1038,8 @@
           </div>
         </div>
 
-        <div id="task-review-qr" class="assignment-card hidden"></div>
       </div>
+      <div id="task-review-qr" class="assignment-card hidden"></div>
 
       <div id="student-no-courses" class="hidden">
         <h3>No Enrolled Courses Yet</h3>
@@ -1197,6 +1199,8 @@
   let studentLessonRefreshInProgress = false;
   let activeDayOneSiteIndex = 0;
   let activeDayOneQuestionIndex = 0;
+  let activeDailyTaskIndex = 0;
+  let activeDailyTaskModuleId = null;
 
   function safeHttpUrl(value) {
     if (typeof value !== 'string' || !value.trim()) return null;
@@ -1779,6 +1783,9 @@
     document.getElementById('student-view').classList.remove('hidden');
     document.getElementById('video-content-pane').classList.add('hidden');
     document.getElementById('day-one-checklist').classList.add('hidden');
+    document.getElementById('daily-task-checklist').classList.add('hidden');
+    document.getElementById('day-one-video').classList.add('hidden');
+    document.getElementById('task-review-qr').classList.add('hidden');
     document.getElementById('student-pending-alert').classList.add('hidden');
     document.getElementById('student-no-courses').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
@@ -1941,6 +1948,9 @@
     }
     document.getElementById('video-content-pane').classList.remove('hidden');
     document.getElementById('day-one-checklist').classList.add('hidden');
+    document.getElementById('daily-task-checklist').classList.add('hidden');
+    document.getElementById('day-one-video').classList.add('hidden');
+    document.getElementById('task-review-qr').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
     document.getElementById('course-title-header').textContent = activeCourse.course_title;
     document.getElementById('course-trainer-name').textContent =
@@ -2005,6 +2015,8 @@
       document.getElementById('video-content-pane').classList.add('hidden');
       document.getElementById('day-one-video').classList.add('hidden');
       document.getElementById('day-one-checklist').classList.add('hidden');
+      document.getElementById('daily-task-checklist').classList.add('hidden');
+      document.getElementById('task-review-qr').classList.add('hidden');
       document.getElementById('student-no-unlocked-lessons').classList.remove('hidden');
     }
   }
@@ -2028,9 +2040,13 @@
 
     const dayOnePane = document.getElementById('day-one-checklist');
     const dayOneVideo = document.getElementById('day-one-video');
+    const dailyTaskPane = document.getElementById('daily-task-checklist');
+    const reviewPane = document.getElementById('task-review-qr');
     const videoPane = document.getElementById('video-content-pane');
     if (mod.order_index === 1 && mod.day_one) {
       videoPane.classList.add('hidden');
+      dailyTaskPane.classList.add('hidden');
+      reviewPane.classList.add('hidden');
       dayOneVideo.classList.remove('hidden');
       dayOnePane.classList.remove('hidden');
       renderDayOneChecklist(mod);
@@ -2038,7 +2054,27 @@
     }
     dayOneVideo.classList.add('hidden');
     dayOnePane.classList.add('hidden');
+    if (mod.order_index >= 2 && mod.order_index <= 12 && mod.daily_task) {
+      videoPane.classList.remove('hidden');
+      document.getElementById('day-video-header').classList.add('hidden');
+      document.getElementById('media-player-wrapper').classList.add('hidden');
+      document.getElementById('lesson-assignment-card').classList.add('hidden');
+      dailyTaskPane.classList.remove('hidden');
+      renderLessonQuestions(mod.questions || []);
+      if (activeDailyTaskModuleId !== mod.module_id) {
+        activeDailyTaskModuleId = mod.module_id;
+        const nextTask = mod.daily_task.tasks.findIndex(task => !task.complete);
+        activeDailyTaskIndex = nextTask >= 0 ? nextTask : mod.daily_task.tasks.length - 1;
+      }
+      renderDailyTasks(mod);
+      loadTaskReviewQr(mod);
+      return;
+    }
+    dailyTaskPane.classList.add('hidden');
     videoPane.classList.remove('hidden');
+    document.getElementById('day-video-header').classList.remove('hidden');
+    document.getElementById('media-player-wrapper').classList.remove('hidden');
+    document.getElementById('lesson-assignment-card').classList.remove('hidden');
 
     document.getElementById('current-lesson-title').innerText = `Day ${mod.order_index}`;
     renderLessonQuestions(mod.questions || []);
@@ -2320,6 +2356,280 @@
     container.appendChild(panel);
   }
 
+  function renderDailyTasks(module) {
+    const container = document.getElementById('daily-task-checklist');
+    const day = module.daily_task;
+    const firstIncompleteTask = day.tasks.findIndex(task => !task.complete);
+    if (firstIncompleteTask >= 0 && activeDailyTaskIndex > firstIncompleteTask) {
+      activeDailyTaskIndex = firstIncompleteTask;
+    }
+    activeDailyTaskIndex = Math.max(0, Math.min(activeDailyTaskIndex, day.tasks.length - 1));
+    const task = day.tasks[activeDailyTaskIndex];
+    const taskComplete = task.complete;
+    const savedState = {
+      rankings: day.rankings,
+      competitor: day.competitor,
+      posts: day.posts,
+    };
+
+    container.replaceChildren();
+    const heading = document.createElement('h2');
+    heading.textContent = `Day ${module.order_index}: Project tasks`;
+    container.appendChild(heading);
+
+    const instructions = document.createElement('p');
+    instructions.className = 'day-one-notice';
+    instructions.textContent =
+      'Complete the three tasks in order. Enter “Not found” when ranking or competitor information is unavailable. The review QR code appears after all tasks are complete.';
+    container.appendChild(instructions);
+
+    const tabs = document.createElement('div');
+    tabs.className = 'daily-task-tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', `Day ${module.order_index} tasks`);
+    day.tasks.forEach((item, index) => {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'day-one-step-tab'
+        + (index === activeDailyTaskIndex ? ' active' : '');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(index === activeDailyTaskIndex));
+      tab.textContent = `${item.title}${item.complete ? ' ✓' : ''}`;
+      tab.disabled = index > 0
+        && day.tasks.slice(0, index).some(previous => !previous.complete);
+      tab.addEventListener('click', () => {
+        activeDailyTaskIndex = index;
+        renderDailyTasks(module);
+      });
+      tabs.appendChild(tab);
+    });
+    container.appendChild(tabs);
+
+    const panel = document.createElement('section');
+    panel.className = 'day-one-panel';
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-label', task.title);
+    const taskHeading = document.createElement('h3');
+    taskHeading.textContent = `${activeDailyTaskIndex + 1}. ${task.title}`;
+    panel.appendChild(taskHeading);
+
+    const form = document.createElement('form');
+    const addField = (labelText, name, value, options = {}) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'form-group';
+      const label = document.createElement('label');
+      label.htmlFor = `daily-task-${name}`;
+      label.textContent = labelText;
+      const field = options.multiline
+        ? document.createElement('textarea')
+        : document.createElement('input');
+      if (!options.multiline) field.type = 'text';
+      field.id = `daily-task-${name}`;
+      field.name = name;
+      field.required = true;
+      field.maxLength = options.maxLength || 1000;
+      field.value = value || '';
+      field.disabled = taskComplete;
+      field.style.width = '100%';
+      field.style.boxSizing = 'border-box';
+      if (options.multiline) field.style.minHeight = '5rem';
+      if (options.placeholder) field.placeholder = options.placeholder;
+      wrapper.append(label, field);
+      form.appendChild(wrapper);
+    };
+
+    if (task.key === 'rankings') {
+      day.keywords.forEach((keyword, index) => {
+        addField(
+          keyword,
+          `ranking-${index}`,
+          savedState.rankings ? savedState.rankings[index] : '',
+          {maxLength: 150, placeholder: 'Position or Not found'}
+        );
+      });
+    } else if (task.key === 'competitor') {
+      const competitorFields = [
+        ['business_name', 'Business name'],
+        ['address', 'Address'],
+        ['contact_number', 'Contact number'],
+        ['business_category', 'Business category'],
+        ['website_url', 'Website URL'],
+        ['reviews', 'Number of reviews'],
+        ['rating', 'Rating'],
+        ['photo_count', 'Photo count'],
+      ];
+      const addCompetitorProfile = (profile = {}, index) => {
+        const profileContainer = document.createElement('section');
+        profileContainer.className = 'daily-competitor-profile';
+        const profileHeading = document.createElement('h4');
+        profileHeading.textContent = index === 0
+          ? 'Business profile'
+          : `Competitor ${index}`;
+        profileContainer.appendChild(profileHeading);
+        const typeField = document.createElement('input');
+        typeField.type = 'hidden';
+        typeField.name = `profile-${index}-profile_type`;
+        typeField.value = index === 0 ? 'business' : 'competitor';
+        profileContainer.appendChild(typeField);
+        competitorFields.forEach(([key, label]) => {
+          addField(
+            label,
+            `profile-${index}-${key}`,
+            profile[key] || '',
+            {maxLength: key === 'address' || key === 'website_url' ? 1000 : 255}
+          );
+          profileContainer.appendChild(form.lastElementChild);
+        });
+        form.appendChild(profileContainer);
+      };
+      const existingProfiles = savedState.competitor || [{}, {}];
+      existingProfiles.forEach((profile, index) => addCompetitorProfile(profile, index));
+      if (!taskComplete && existingProfiles.length < 10) {
+        const addCompetitorButton = document.createElement('button');
+        addCompetitorButton.type = 'button';
+        addCompetitorButton.className = 'submit-btn';
+        addCompetitorButton.style.width = 'auto';
+        addCompetitorButton.textContent = 'Add another competitor';
+        addCompetitorButton.addEventListener('click', () => {
+          const nextIndex = form.querySelectorAll('.daily-competitor-profile').length;
+          addCompetitorProfile({}, nextIndex);
+          if (nextIndex + 1 >= 10) addCompetitorButton.disabled = true;
+        });
+        form.appendChild(addCompetitorButton);
+      }
+    } else {
+      for (let index = 0; index < 3; index += 1) {
+        const post = savedState.posts ? savedState.posts[index] : {};
+        const postHeading = document.createElement('h4');
+        postHeading.textContent = `Post ${index + 1}`;
+        form.appendChild(postHeading);
+        addField(
+          'Image description or prompt',
+          `post-${index}-image_description`,
+          post.image_description,
+          {multiline: true, maxLength: 2000}
+        );
+        addField(
+          'Post content',
+          `post-${index}-content`,
+          post.content,
+          {multiline: true, maxLength: 4000}
+        );
+        addField(
+          'Call to action (CTA)',
+          `post-${index}-cta`,
+          post.cta,
+          {maxLength: 500}
+        );
+      }
+    }
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'submit-btn';
+    saveButton.style.width = 'auto';
+    saveButton.textContent = taskComplete
+      ? 'Task completed'
+      : activeDailyTaskIndex === day.tasks.length - 1
+        ? 'Save task and finish the day'
+        : 'Save task and continue';
+    saveButton.disabled = taskComplete;
+    form.appendChild(saveButton);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      saveButton.disabled = true;
+      submitDailyTask(module, task.key, form, saveButton);
+    });
+    panel.appendChild(form);
+
+    if (day.complete) {
+      const completeMessage = document.createElement('p');
+      completeMessage.className = 'day-one-notice';
+      completeMessage.textContent =
+        'All tasks are complete. Scan the review QR code below to finish the day.';
+      panel.appendChild(completeMessage);
+    }
+    container.appendChild(panel);
+  }
+
+  async function submitDailyTask(module, task, form, saveButton) {
+    const fieldValue = name => form.elements.namedItem(name).value.trim();
+    const enrollmentId = activeEnrollmentId;
+    const payload = {
+      enrollment_id: enrollmentId,
+      module_id: module.module_id,
+      task,
+    };
+    if (task === 'rankings') {
+      payload.rankings = module.daily_task.keywords.map((_, index) =>
+        fieldValue(`ranking-${index}`)
+      );
+    } else if (task === 'competitor') {
+      payload.competitor_profiles = Array.from(
+        form.querySelectorAll('.daily-competitor-profile')
+      ).map((profile, profileIndex) => {
+        return Object.fromEntries([
+          'profile_type',
+          'business_name',
+          'address',
+          'contact_number',
+          'business_category',
+          'website_url',
+          'reviews',
+          'rating',
+          'photo_count',
+        ].map(key => [
+          key,
+          fieldValue(`profile-${profileIndex}-${key}`),
+        ]));
+      });
+    } else {
+      payload.posts = Array.from({length: 3}, (_, index) => ({
+        image_description: fieldValue(`post-${index}-image_description`),
+        content: fieldValue(`post-${index}-content`),
+        cta: fieldValue(`post-${index}-cta`),
+      }));
+    }
+
+    try {
+      const response = await fetch('/student/daily-task', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map(issue => typeof issue === 'string'
+            ? issue
+            : issue.msg || JSON.stringify(issue)).join('\n')
+          : typeof data.detail === 'string'
+            ? data.detail
+            : JSON.stringify(data.detail);
+        throw new Error(detail || 'Could not save this task.');
+      }
+      if (activeEnrollmentId !== enrollmentId || activeModuleId !== module.module_id) return;
+      module.daily_task = data.daily_task;
+      const nextTask = data.daily_task.tasks.findIndex(item => !item.complete);
+      activeDailyTaskIndex = nextTask >= 0 ? nextTask : data.daily_task.tasks.length - 1;
+      module.assignment_completed = data.daily_task.complete;
+      module.is_video_completed = data.daily_task.complete;
+      module.review_available = data.daily_task.complete;
+      renderDailyTasks(module);
+      await loadTaskReviewQr(module);
+      if (data.daily_task.complete) {
+        await renderStudentDashboard();
+      }
+    } catch (error) {
+      alert(error.message || 'Could not save this task.');
+      saveButton.disabled = false;
+    }
+  }
+
   async function markDayOneSiteVisited(module, enrollmentId, websiteIndex) {
     try {
       const response = await fetch('/student/day-one/visit', {
@@ -2472,7 +2782,9 @@
     container.appendChild(heading);
     if (!module.review_available) {
       const notice = document.createElement('p');
-      notice.textContent = 'After your trainer approves your assignment, a QR code for the reflection form will appear here.';
+      notice.textContent = module.daily_task
+        ? 'Complete all three portal tasks to unlock this day’s review QR code.'
+        : 'After your trainer approves your assignment, a QR code for the reflection form will appear here.';
       container.appendChild(notice);
       return;
     }
@@ -3799,6 +4111,10 @@
   function addTrainerLesson(containerId) {
     const container = document.getElementById(containerId);
     const lessonNumber = container.querySelectorAll('.trainer-lesson').length + 1;
+    if (lessonNumber > 12) {
+      alert('Courses can have no more than 12 days.');
+      return;
+    }
     const fieldset = document.createElement('fieldset');
     fieldset.className = 'trainer-lesson assignment-card';
 
@@ -3808,7 +4124,7 @@
 
     const fields = [
       ['Day title', 'lesson-title', 'text', true],
-      ['Video URL (optional for Day 1)', 'lesson-video-url', 'url', lessonNumber !== 1],
+      ['Video URL (optional)', 'lesson-video-url', 'url', false],
       ['Day task (optional)', 'lesson-assignment-prompt', 'textarea', false],
     ];
     fields.forEach(([labelText, className, type, required]) => {
@@ -3843,6 +4159,12 @@
     });
     fieldset.appendChild(removeButton);
     container.appendChild(fieldset);
+    if (lessonNumber === 12) {
+      const addButton = container.closest('form').querySelector(
+        `button[onclick="addTrainerLesson('${containerId}')"]`
+      );
+      if (addButton) addButton.disabled = true;
+    }
   }
 
   function openNewCourseModal() {
@@ -3879,11 +4201,16 @@
       course => course.id === document.getElementById('trainer-existing-course').value
     );
     const nextOrder = selectedCourse ? (selectedCourse.modules || []).length + 1 : 1;
-    document.getElementById('trainer-existing-lesson-order').textContent = `This will be Day ${nextOrder}.`;
+    const orderNotice = document.getElementById('trainer-existing-lesson-order');
+    const addButton = document.querySelector('#trainer-existing-lesson-form button[type="submit"]');
+    orderNotice.textContent = nextOrder > 12
+      ? 'This 12-day course already has all days.'
+      : `This will be Day ${nextOrder}.`;
+    addButton.disabled = nextOrder > 12;
     const videoInput = document.querySelector(
       '#trainer-existing-lesson-fields .lesson-video-url'
     );
-    if (videoInput) videoInput.required = nextOrder !== 1;
+    if (videoInput) videoInput.required = false;
   }
 
   function closeTrainerModal(modalId) {

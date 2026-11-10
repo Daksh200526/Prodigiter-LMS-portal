@@ -2,6 +2,7 @@ import os
 import re
 import datetime
 import base64
+from contextlib import asynccontextmanager
 import hashlib
 import hmac
 import io
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 import models
 import auth
 import schemas
+import database
 from config import settings
 from database import engine, get_db
 from review_service import REVIEW_QUESTIONS, ReviewProviderError, generate_review
@@ -88,6 +90,7 @@ for column_name, column_definition in (
     ("generated_review", "TEXT"),
     ("review_generated_at", "DATETIME"),
     ("day_one_state", "TEXT"),
+    ("daily_task_state", "TEXT"),
 ):
     if column_name not in progress_columns:
         try:
@@ -108,7 +111,41 @@ with engine.begin() as connection:
         "WHERE assignment_completed = 1 AND assignment_completed_at IS NULL"
     ))
 
-app = FastAPI(title="prodigiter LMS Portal")
+def _ensure_existing_courses_have_twelve_days():
+    db = database.SessionLocal()
+    try:
+        courses = db.query(models.Course).options(
+            selectinload(models.Course.modules)
+        ).all()
+        for course in courses:
+            existing_orders = {module.order_index for module in course.modules}
+            for order_index in range(1, 13):
+                if order_index in existing_orders:
+                    continue
+                db.add(models.Module(
+                    id=str(uuid.uuid4()),
+                    course_id=course.id,
+                    order_index=order_index,
+                    title=f"Day {order_index}",
+                    video_url="",
+                    assignment_prompt=(
+                        "Complete the website checks for each site."
+                        if order_index == 1
+                        else "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                    ),
+                ))
+        db.commit()
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _ensure_existing_courses_have_twelve_days()
+    yield
+
+
+app = FastAPI(title="prodigiter LMS Portal", lifespan=lifespan)
 
 DAY_ONE_WEBSITES = (
     {"key": "beyondental", "name": "Beyon Dental", "url": "https://beyondental.in/"},
@@ -128,6 +165,36 @@ DAY_ONE_QUESTIONS = (
     {"key": "thank_you_page", "label": "Is the Thank You page available after form submission?"},
     {"key": "social_media", "label": "Is social media integration available and working?"},
 )
+DAILY_TASK_KEYWORDS = (
+    "dental clinic in vasanth nagar",
+    "Gum treatment in vasath nagar",
+    "wisdom tooth extraction in vasanth nagar",
+    "teeth whitening treatment in vasanth nagar",
+    "dental care in vasanth nagar",
+    "dentist in vasanth nagar",
+    "best dentist in vasanth nagar",
+    "dental implants in vasanth nagar",
+    "cosmetic dentistry in vasanth nagar",
+    "dental braces in vasanth nagar",
+    "teeth braces in vasanth nagar",
+    "invisible braces in vasanth nagar",
+    "braces for teeth in vasanth nagar",
+    "invisalign aligners in vasanth nagar",
+)
+DAILY_TASKS = ("rankings", "competitor", "posts")
+DAILY_TASK_FIELD_NAMES = (
+    "profile_type",
+    "business_name",
+    "address",
+    "contact_number",
+    "business_category",
+    "website_url",
+    "reviews",
+    "rating",
+    "photo_count",
+)
+DAILY_POST_FIELD_NAMES = ("image_description", "content", "cta")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -580,14 +647,24 @@ def student_dashboard(
             prog = progress_by_module.get(mod.id)
 
             day_one_complete = _day_one_complete(prog) if mod.order_index == 1 else False
+            is_daily_task_day = 2 <= mod.order_index <= 12
+            daily_task_complete = (
+                _daily_task_complete(prog)
+                if is_daily_task_day and prog and prog.daily_task_state
+                else False
+            )
             is_video_done = (
                 day_one_complete
                 if mod.order_index == 1
+                else daily_task_complete
+                if is_daily_task_day and prog and prog.daily_task_state
                 else prog.is_video_completed if prog else False
             )
             assignment_done = (
                 day_one_complete
                 if mod.order_index == 1
+                else daily_task_complete
+                if is_daily_task_day and prog and prog.daily_task_state
                 else prog.assignment_completed if prog else False
             )
             status_val = (
@@ -616,7 +693,11 @@ def student_dashboard(
                 "assignment_prompt": (
                     "Complete the website checks for each site."
                     if mod.order_index == 1
-                    else mod.assignment_prompt or ""
+                    else (
+                        "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                        if is_daily_task_day
+                        else mod.assignment_prompt or ""
+                    )
                 ),
                 "is_unlocked": is_unlocked,
                 "lock_reason": lock_reason,
@@ -626,8 +707,14 @@ def student_dashboard(
                 "submission_notes": prog.submission_notes if prog else "",
                 "trainer_feedback": feedback,
                 "day_one": _day_one_payload(prog) if mod.order_index == 1 else None,
+                "daily_task": (
+                    _daily_task_payload(prog)
+                    if is_daily_task_day
+                    else None
+                ),
                 "review_available": bool(mod.order_index != 1 and prog and (
-                    prog.assignment_status == "approved"
+                    _daily_task_complete(prog)
+                    or prog.assignment_status == "approved"
                     or (prog.assignment_completed and prog.assignment_completed_at)
                 )),
                 "questions": [
@@ -869,7 +956,142 @@ def _day_one_payload(progress: models.StudentProgress | None) -> dict:
     }
 
 
+def _new_daily_task_state() -> dict:
+    return {
+        "rankings": None,
+        "competitor": None,
+        "posts": None,
+    }
+
+
+def _load_daily_task_state(progress: models.StudentProgress | None) -> dict:
+    if not progress or not progress.daily_task_state:
+        return _new_daily_task_state()
+    try:
+        state = json.loads(progress.daily_task_state)
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=500,
+            detail="Daily task progress data is invalid. Please contact support.",
+        ) from error
+
+    rankings = state.get("rankings") if isinstance(state, dict) else None
+    competitor = state.get("competitor") if isinstance(state, dict) else None
+    posts = state.get("posts") if isinstance(state, dict) else None
+    if (
+        not isinstance(state, dict)
+        or set(state) != set(DAILY_TASKS)
+        or (rankings is not None and (
+            not isinstance(rankings, list)
+            or len(rankings) != len(DAILY_TASK_KEYWORDS)
+            or any(not isinstance(value, str) or not value.strip() for value in rankings)
+        ))
+        or (competitor is not None and (
+            not isinstance(competitor, list)
+            or len(competitor) < 2
+            or len(competitor) > 10
+            or any(
+                not isinstance(profile, dict)
+                or set(profile) != set(DAILY_TASK_FIELD_NAMES)
+                or profile.get("profile_type") not in {"business", "competitor"}
+                or any(
+                    not isinstance(profile[field], str) or not profile[field].strip()
+                    for field in DAILY_TASK_FIELD_NAMES
+                )
+                for profile in competitor
+            )
+            or sum(profile["profile_type"] == "business" for profile in competitor) != 1
+            or not any(profile["profile_type"] == "competitor" for profile in competitor)
+        ))
+        or (posts is not None and (
+            not isinstance(posts, list)
+            or len(posts) != 3
+            or any(
+                not isinstance(post, dict)
+                or set(post) != set(DAILY_POST_FIELD_NAMES)
+                or any(
+                    not isinstance(post[field], str) or not post[field].strip()
+                    for field in DAILY_POST_FIELD_NAMES
+                )
+                for post in posts
+            )
+        ))
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Daily task progress data is invalid. Please contact support.",
+        )
+    return state
+
+
+def _daily_task_complete(progress: models.StudentProgress | None) -> bool:
+    if not progress:
+        return False
+    state = _load_daily_task_state(progress)
+    return all(state[task] is not None for task in DAILY_TASKS)
+
+
+def _daily_task_submission_summary(state: dict) -> str:
+    lines = ["Keyword rankings"]
+    lines.extend(
+        f"- {keyword}: {position}"
+        for keyword, position in zip(DAILY_TASK_KEYWORDS, state["rankings"])
+    )
+    lines.append("\nCompetitor analysis")
+    for profile in state["competitor"]:
+        lines.append(f"\n{profile['profile_type'].title()}")
+        lines.extend(
+            f"- {key.replace('_', ' ').title()}: {value}"
+            for key, value in profile.items()
+            if key != "profile_type"
+        )
+    for index, post in enumerate(state["posts"], start=1):
+        lines.extend((
+            f"\nSocial post {index}",
+            f"- Image description: {post['image_description']}",
+            f"- Content: {post['content']}",
+            f"- CTA: {post['cta']}",
+        ))
+    return "\n".join(lines)
+
+
+def _daily_task_payload(progress: models.StudentProgress | None) -> dict:
+    state = _load_daily_task_state(progress)
+    return {
+        "keywords": list(DAILY_TASK_KEYWORDS),
+        "tasks": [
+            {"key": "rankings", "title": "Keyword rankings", "complete": state["rankings"] is not None},
+            {"key": "competitor", "title": "Competitor analysis", "complete": state["competitor"] is not None},
+            {"key": "posts", "title": "Social posts", "complete": state["posts"] is not None},
+        ],
+        "rankings": state["rankings"],
+        "competitor": state["competitor"],
+        "posts": state["posts"],
+        "complete": _daily_task_complete(progress),
+    }
+
+
 def _get_or_create_day_one_progress(
+    db: Session,
+    enrollment_id: str,
+    module_id: str,
+) -> models.StudentProgress:
+    progress = db.query(models.StudentProgress).filter_by(
+        enrollment_id=enrollment_id,
+        module_id=module_id,
+    ).first()
+    if not progress:
+        progress = models.StudentProgress(
+            id=str(uuid.uuid4()),
+            enrollment_id=enrollment_id,
+            module_id=module_id,
+            assignment_status="not_started",
+        )
+        db.add(progress)
+    return progress
+
+
+def _get_or_create_daily_task_progress(
     db: Session,
     enrollment_id: str,
     module_id: str,
@@ -915,6 +1137,12 @@ def _module_unlock_status(
         and not _day_one_complete(previous_progress)
     ):
         return False, "Complete all Day 1 website checks first."
+    if (
+        2 <= previous_module.order_index <= 12
+        and previous_progress.daily_task_state
+        and not _daily_task_complete(previous_progress)
+    ):
+        return False, f"Complete all Day {previous_module.order_index} tasks first."
     if not previous_progress.assignment_completed:
         return False, f"Complete the task for Day {previous_module.order_index} first."
     if not previous_progress.assignment_completed_at:
@@ -1088,6 +1316,11 @@ async def assignment_completion_webhook(
             status_code=409,
             detail="Complete Day 1 using the website checks in the portal.",
         )
+    if 2 <= module.order_index <= 12:
+        raise HTTPException(
+            status_code=409,
+            detail="Complete this day's tasks using the portal task form.",
+        )
 
     progress = db.query(models.StudentProgress).filter_by(
         enrollment_id=enrollment.id,
@@ -1108,6 +1341,108 @@ async def assignment_completion_webhook(
         progress.assignment_completed_at = datetime.datetime.now(timezone.utc)
     db.commit()
     return {"message": "Assignment completion recorded."}
+
+
+@app.post("/student/daily-task")
+def save_daily_task(
+    payload: schemas.DailyTaskSubmission,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    _, module = _get_unlocked_student_module(
+        db,
+        current_user,
+        payload.enrollment_id,
+        payload.module_id,
+    )
+    if not 2 <= module.order_index <= 12:
+        raise HTTPException(status_code=404, detail="Daily portal tasks are available for Days 2–12.")
+
+    progress = _get_or_create_daily_task_progress(
+        db,
+        payload.enrollment_id,
+        module.id,
+    )
+    if progress.assignment_completed and not progress.daily_task_state:
+        raise HTTPException(
+            status_code=409,
+            detail="This day was already completed before portal tasks were enabled.",
+        )
+
+    state = _load_daily_task_state(progress)
+    if _daily_task_complete(progress):
+        raise HTTPException(status_code=409, detail="All tasks for this day are already complete.")
+
+    task_index = DAILY_TASKS.index(payload.task)
+    for previous_task in DAILY_TASKS[:task_index]:
+        if state[previous_task] is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Complete the previous task before continuing.",
+            )
+
+    if payload.task == "rankings":
+        if payload.rankings is None:
+            raise HTTPException(status_code=422, detail="Enter a ranking for every keyword.")
+        rankings = [value.strip() for value in payload.rankings]
+        if any(not value or len(value) > 150 for value in rankings):
+            raise HTTPException(
+                status_code=422,
+                detail="Each keyword needs a ranking or a short 'Not found' response.",
+            )
+        state["rankings"] = rankings
+    elif payload.task == "competitor":
+        if payload.competitor_profiles is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Enter the business and at least one competitor profile.",
+            )
+        competitor = [
+            {
+                key: value.strip()
+                for key, value in profile.model_dump().items()
+            }
+            for profile in payload.competitor_profiles
+        ]
+        if (
+            any(not value for profile in competitor for value in profile.values())
+            or sum(profile["profile_type"] == "business" for profile in competitor) != 1
+            or not any(profile["profile_type"] == "competitor" for profile in competitor)
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Complete one business profile and at least one competitor profile. Use 'Not found' when unavailable.",
+            )
+        state["competitor"] = competitor
+    else:
+        if payload.posts is None:
+            raise HTTPException(status_code=422, detail="Complete all three social posts.")
+        posts = [
+            {
+                key: value.strip()
+                for key, value in post.model_dump().items()
+            }
+            for post in payload.posts
+        ]
+        if any(not value for post in posts for value in post.values()):
+            raise HTTPException(
+                status_code=422,
+                detail="Each post needs an image description, content, and call to action.",
+            )
+        state["posts"] = posts
+
+    progress.daily_task_state = json.dumps(state)
+    if _daily_task_complete(progress):
+        completed_at = datetime.datetime.now(timezone.utc)
+        progress.is_video_completed = True
+        progress.video_completed_at = completed_at
+        progress.assignment_completed = True
+        progress.assignment_completed_at = completed_at
+        progress.assignment_status = "submitted"
+        progress.submitted_at = completed_at
+        progress.submission_notes = _daily_task_submission_summary(state)
+    db.commit()
+    return {"daily_task": _daily_task_payload(progress)}
 
 
 def _review_token(progress: models.StudentProgress) -> str:
@@ -1448,6 +1783,11 @@ def submit_assignment(
             status_code=409,
             detail="Complete Day 1 using the website checks in the portal.",
         )
+    if 2 <= module.order_index <= 12:
+        raise HTTPException(
+            status_code=409,
+            detail="Complete this day's tasks using the portal task form.",
+        )
     prog = db.query(models.StudentProgress).filter_by(
         enrollment_id=enrollment_id,
         module_id=module_id
@@ -1580,6 +1920,8 @@ def create_trainer_course(
     order_indexes = [module.order_index for module in payload.modules]
     if len(order_indexes) != len(set(order_indexes)):
         raise HTTPException(status_code=422, detail="Day numbers must be unique.")
+    if any(order_index > 12 for order_index in order_indexes):
+        raise HTTPException(status_code=422, detail="A course can contain at most 12 days.")
 
     title = payload.title.strip()
     if not title:
@@ -1592,21 +1934,36 @@ def create_trainer_course(
         trainer_id=current_user.id,
     )
     db.add(course)
-    for module_payload in sorted(payload.modules, key=lambda module: module.order_index):
-        module_title = module_payload.title.strip()
-        video_url = module_payload.video_url.strip()
-        if not module_title or (not video_url and module_payload.order_index != 1):
+    modules_by_order = {module.order_index: module for module in payload.modules}
+    for order_index in range(1, 13):
+        module_payload = modules_by_order.get(order_index)
+        module_title = (
+            module_payload.title.strip()
+            if module_payload
+            else f"Day {order_index}"
+        )
+        video_url = module_payload.video_url.strip() if module_payload else ""
+        if not module_title:
             raise HTTPException(
                 status_code=422,
-                detail="Day title and video URL cannot be empty.",
+                detail="Day title cannot be empty.",
             )
+        assignment_prompt = (
+            module_payload.assignment_prompt.strip()
+            if module_payload and module_payload.assignment_prompt
+            else (
+                "Complete the website checks for each site."
+                if order_index == 1
+                else "Complete the keyword rankings, competitor analysis, and three social posts in order."
+            )
+        )
         db.add(models.Module(
             id=str(uuid.uuid4()),
             course_id=course.id,
-            order_index=module_payload.order_index,
+            order_index=order_index,
             title=module_title,
             video_url=video_url,
-            assignment_prompt=(module_payload.assignment_prompt or "").strip(),
+            assignment_prompt=assignment_prompt,
         ))
     # A new course must NOT auto-enroll existing students.
     # Trainers assign it explicitly via /trainer/assign-course.
@@ -1614,7 +1971,7 @@ def create_trainer_course(
     return {
         "course_id": course.id,
         "title": course.title,
-        "module_count": len(payload.modules),
+        "module_count": 12,
     }
 
 
@@ -1639,6 +1996,8 @@ def add_trainer_course_module(
         course_id=course.id
     ).order_by(models.Module.order_index.desc()).first()
     next_order_index = last_module.order_index + 1 if last_module else 1
+    if next_order_index > 12:
+        raise HTTPException(status_code=409, detail="This course already has all 12 days.")
     if payload.order_index != next_order_index:
         raise HTTPException(
             status_code=422,
@@ -1647,10 +2006,10 @@ def add_trainer_course_module(
 
     title = payload.title.strip()
     video_url = payload.video_url.strip()
-    if not title or (not video_url and next_order_index != 1):
+    if not title:
         raise HTTPException(
             status_code=422,
-            detail="Day title and video URL cannot be empty.",
+            detail="Day title cannot be empty.",
         )
 
     module = models.Module(
@@ -1985,14 +2344,26 @@ def evaluate_assignment(
     prog.trainer_feedback = payload.feedback
     evaluated_at = datetime.datetime.now(timezone.utc)
     prog.evaluated_at = evaluated_at
-    if payload.is_approved:
-        prog.assignment_completed = True
-        prog.assignment_completed_at = evaluated_at
-    else:
-        prog.assignment_completed = False
-        prog.assignment_completed_at = None
+    is_portal_task_day = (
+        prog.module
+        and 2 <= prog.module.order_index <= 12
+        and prog.daily_task_state
+    )
+    if not is_portal_task_day:
+        if payload.is_approved:
+            prog.assignment_completed = True
+            prog.assignment_completed_at = evaluated_at
+        else:
+            prog.assignment_completed = False
+            prog.assignment_completed_at = None
     db.commit()
-    return {"message": "Evaluation recorded. 24-hour unlock cooldown has started." if payload.is_approved else "Assignment rejected."}
+    if not payload.is_approved:
+        message = "Assignment rejected."
+    elif is_portal_task_day:
+        message = "Evaluation recorded. The day completion time and unlock timer are unchanged."
+    else:
+        message = "Evaluation recorded. 24-hour unlock cooldown has started."
+    return {"message": message}
 
 
 @app.get("/admin/dashboard")
