@@ -364,6 +364,13 @@
       border-radius: 8px;
       background: var(--surface-muted);
     }
+    .day-one-question-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
     .day-one-site-link {
       display: inline-flex;
       margin: 0.35rem 0 1rem;
@@ -373,6 +380,73 @@
       background: var(--card);
       color: var(--link);
       font-weight: 600;
+    }
+    .announcement-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: calc(100% - 1rem);
+      box-sizing: border-box;
+      margin: 0.5rem;
+      padding: 0.7rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-muted);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .announcement-button:hover {
+      background: var(--surface-hover);
+    }
+    .announcement-badge {
+      min-width: 1.4rem;
+      padding: 0.15rem 0.35rem;
+      border-radius: 999px;
+      background: var(--badge-danger-bg);
+      color: var(--badge-danger-text);
+      font-size: 0.75rem;
+      text-align: center;
+    }
+    .announcement-dialog {
+      max-width: 580px;
+    }
+    .announcement-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+    .announcement-item {
+      padding: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-muted);
+    }
+    .announcement-item h4 {
+      margin: 0 0 0.4rem;
+    }
+    .announcement-item p {
+      margin: 0.4rem 0;
+      white-space: pre-wrap;
+    }
+    .announcement-date {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .trainer-announcement-form {
+      display: grid;
+      gap: 0.5rem;
+      margin: 0.75rem 0 1rem;
+      padding: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+    }
+    .trainer-announcement-form textarea {
+      min-height: 4rem;
+      resize: vertical;
     }
     .day-one-answer-options {
       display: flex;
@@ -420,35 +494,6 @@
       padding: 1.25rem;
       margin-top: 1rem;
     }
-    .lesson-community-tabs {
-      display: flex;
-      gap: 1.25rem;
-      margin: 0 -0.25rem 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .lesson-community-tab {
-      padding: 0.75rem 0.25rem;
-      border: 0;
-      border-bottom: 3px solid transparent;
-      margin-bottom: -1px;
-      background: transparent;
-      color: var(--text-muted);
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .lesson-community-tab.active {
-      border-bottom-color: var(--text);
-      color: var(--text);
-    }
-    .lesson-community-tab:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
-    }
-    .lesson-community-panel {
-      min-width: 0;
-    }
-
     /* Modal Backdrop */
     .modal-backdrop {
       position: fixed;
@@ -978,6 +1023,11 @@
         </select>
       </div>
       <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
+      <button id="student-announcements-button" class="announcement-button" type="button"
+        onclick="openStudentAnnouncements()" aria-haspopup="dialog">
+        <span>Announcements</span>
+        <span id="student-announcements-count" class="announcement-badge hidden" aria-label="Unread announcements">0</span>
+      </button>
     </div>
 
     <!-- Main Workspace -->
@@ -1008,29 +1058,13 @@
         </div>
 
         <section id="lesson-community-card" class="assignment-card" aria-labelledby="lesson-questions-heading">
-          <div class="lesson-community-tabs" role="tablist" aria-label="Day community">
-            <button id="lesson-qa-tab" class="lesson-community-tab active" type="button" role="tab"
-              aria-selected="true" aria-controls="lesson-qa-panel"
-              onclick="switchLessonCommunityTab('qa')">Q&amp;A</button>
-            <button id="lesson-announcements-tab" class="lesson-community-tab" type="button" role="tab"
-              aria-selected="false" aria-controls="lesson-announcements-panel" tabindex="-1"
-              onclick="switchLessonCommunityTab('announcements')">Announcements</button>
-          </div>
-          <div id="lesson-qa-panel" class="lesson-community-panel" role="tabpanel"
-            aria-labelledby="lesson-qa-tab">
-            <h4 id="lesson-questions-heading" style="margin-top: 0;">Day questions &amp; answers</h4>
-            <div id="lesson-questions-list"></div>
-            <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
-              <label for="lesson-question-input">Ask the course trainer</label>
-              <textarea id="lesson-question-input" maxlength="2000" required style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
-              <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Post question</button>
-            </form>
-          </div>
-          <div id="lesson-announcements-panel" class="lesson-community-panel hidden" role="tabpanel"
-            aria-labelledby="lesson-announcements-tab" hidden>
-            <h4 style="margin-top: 0;">Announcements</h4>
-            <p>No announcements have been posted yet.</p>
-          </div>
+          <h4 id="lesson-questions-heading" style="margin-top: 0;">Day questions &amp; answers</h4>
+          <div id="lesson-questions-list"></div>
+          <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
+            <label for="lesson-question-input">Ask the course trainer</label>
+            <textarea id="lesson-question-input" maxlength="2000" required style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
+            <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Post question</button>
+          </form>
         </section>
 
         <div id="lesson-assignment-card" class="assignment-card">
@@ -1127,6 +1161,16 @@
       </aside>
     </div>
   </div>
+</div>
+
+<div id="student-announcements-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true"
+  aria-labelledby="student-announcements-title">
+  <section class="modal-box announcement-dialog">
+    <button type="button" class="modal-close-btn" aria-label="Close announcements"
+      onclick="closeStudentAnnouncements()">&times;</button>
+    <h3 id="student-announcements-title" style="margin-top: 0;">Announcements</h3>
+    <div id="student-announcements-list" class="announcement-list" aria-live="polite"></div>
+  </section>
 </div>
 
 <div id="admin-trainer-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="admin-trainer-modal-title">
@@ -1946,9 +1990,128 @@
     }
   }
 
+  async function refreshStudentAnnouncementCount(enrollmentId) {
+    if (!enrollmentId) return;
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(enrollmentId)}/announcements/unread-count`,
+        { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not check announcements.');
+      if (enrollmentId !== activeEnrollmentId) return;
+
+      const badge = document.getElementById('student-announcements-count');
+      const count = Number(data.unread_count) || 0;
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.classList.toggle('hidden', count === 0);
+      document.getElementById('student-announcements-button').setAttribute(
+        'aria-label',
+        count ? `Announcements, ${count} unread` : 'Announcements'
+      );
+    } catch (error) {
+      console.error('Announcement count could not be refreshed:', error);
+    }
+  }
+
+  async function openStudentAnnouncements() {
+    const enrollmentId = activeEnrollmentId;
+    const modal = document.getElementById('student-announcements-modal');
+    const list = document.getElementById('student-announcements-list');
+    modal.classList.remove('hidden');
+    if (!enrollmentId) {
+      list.textContent = 'Enroll in a course to view its announcements.';
+      return;
+    }
+    list.textContent = 'Loading announcements...';
+
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(enrollmentId)}/announcements`,
+        { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load announcements.');
+      if (enrollmentId !== activeEnrollmentId) return;
+
+      list.replaceChildren();
+      if (!data.announcements.length) {
+        list.textContent = 'No announcements have been posted yet.';
+      } else {
+        data.announcements.forEach(announcement => {
+          const item = document.createElement('article');
+          item.className = 'announcement-item';
+          const title = document.createElement('h4');
+          title.textContent = announcement.title;
+          const date = document.createElement('time');
+          date.className = 'announcement-date';
+          date.dateTime = announcement.created_at;
+          date.textContent = new Date(announcement.created_at).toLocaleString();
+          const message = document.createElement('p');
+          message.textContent = announcement.message;
+          item.append(title, date, message);
+          list.appendChild(item);
+        });
+
+        const unreadIds = data.announcements
+          .filter(announcement => !announcement.is_read)
+          .map(announcement => announcement.id);
+        if (unreadIds.length) {
+          const readResponse = await fetch(
+            `/student/enrollments/${encodeURIComponent(enrollmentId)}/announcements/read`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ announcement_ids: unreadIds }),
+            }
+          );
+          const readData = await readResponse.json();
+          if (!readResponse.ok) throw new Error(readData.detail || 'Could not update announcement status.');
+          if (enrollmentId === activeEnrollmentId) {
+            const badge = document.getElementById('student-announcements-count');
+            const count = Number(readData.unread_count) || 0;
+            badge.textContent = count > 99 ? '99+' : String(count);
+            badge.classList.toggle('hidden', count === 0);
+            document.getElementById('student-announcements-button').setAttribute(
+              'aria-label',
+              count ? `Announcements, ${count} unread` : 'Announcements'
+            );
+          }
+        } else {
+          await refreshStudentAnnouncementCount(enrollmentId);
+        }
+      }
+    } catch (error) {
+      list.textContent = error.message || 'Could not load announcements.';
+    }
+  }
+
+  function closeStudentAnnouncements() {
+    document.getElementById('student-announcements-modal').classList.add('hidden');
+  }
+
+  document.getElementById('student-announcements-modal').addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeStudentAnnouncements();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeStudentAnnouncements();
+  });
+  window.setInterval(() => {
+    if (
+      activeEnrollmentId
+      && !document.getElementById('student-view').classList.contains('hidden')
+    ) {
+      refreshStudentAnnouncementCount(activeEnrollmentId);
+    }
+  }, 60000);
+
   function renderStudentCourse(activeCourse) {
     activeEnrollmentId = activeCourse.enrollment_id;
     activeStudentData = activeCourse;
+    refreshStudentAnnouncementCount(activeEnrollmentId);
     const dayOneModule = activeCourse.modules.find(module => module.order_index === 1);
     if (dayOneModule && dayOneModule.day_one) {
       const firstIncompleteSite = dayOneModule.day_one.websites.findIndex(
@@ -2309,10 +2472,21 @@
     panel.appendChild(questionTabs);
 
     const currentQuestion = day.questions[activeDayOneQuestionIndex];
+    const questionHeading = document.createElement('div');
+    questionHeading.className = 'day-one-question-heading';
     const questionLabel = document.createElement('h4');
     questionLabel.textContent =
       `Check ${activeDayOneQuestionIndex + 1} of ${day.questions.length}: ${currentQuestion.label}`;
-    panel.appendChild(questionLabel);
+    questionHeading.appendChild(questionLabel);
+    const questionLink = document.createElement('a');
+    questionLink.className = 'day-one-site-link';
+    questionLink.href = new URL(currentQuestion.path, site.url).href;
+    questionLink.target = '_blank';
+    questionLink.rel = 'noopener noreferrer';
+    questionLink.textContent = 'Click here';
+    questionLink.setAttribute('aria-label', `Open page for: ${currentQuestion.label}`);
+    questionHeading.appendChild(questionLink);
+    panel.appendChild(questionHeading);
 
     if (firstUnansweredQuestion < 0) {
       const completeMessage = document.createElement('p');
@@ -2761,26 +2935,6 @@
 
       container.appendChild(card);
     });
-  }
-
-  function switchLessonCommunityTab(tab) {
-    const isAnnouncements = tab === 'announcements';
-    const qaTab = document.getElementById('lesson-qa-tab');
-    const announcementsTab = document.getElementById('lesson-announcements-tab');
-    const qaPanel = document.getElementById('lesson-qa-panel');
-    const announcementsPanel = document.getElementById('lesson-announcements-panel');
-
-    qaTab.classList.toggle('active', !isAnnouncements);
-    qaTab.setAttribute('aria-selected', String(!isAnnouncements));
-    qaTab.tabIndex = isAnnouncements ? -1 : 0;
-    qaPanel.classList.toggle('hidden', isAnnouncements);
-    qaPanel.hidden = isAnnouncements;
-
-    announcementsTab.classList.toggle('active', isAnnouncements);
-    announcementsTab.setAttribute('aria-selected', String(isAnnouncements));
-    announcementsTab.tabIndex = isAnnouncements ? 0 : -1;
-    announcementsPanel.classList.toggle('hidden', !isAnnouncements);
-    announcementsPanel.hidden = !isAnnouncements;
   }
 
   async function loadTaskReviewQr(module) {
@@ -3546,6 +3700,72 @@
     renderAdminDashboard();
   }
 
+  function createCourseAnnouncementForm(course) {
+    const form = document.createElement('form');
+    form.className = 'trainer-announcement-form';
+    const heading = document.createElement('strong');
+    heading.textContent = 'Share an announcement with enrolled students';
+    const titleInput = document.createElement('input');
+    titleInput.maxLength = 150;
+    titleInput.placeholder = 'Announcement title';
+    titleInput.setAttribute('aria-label', 'Announcement title');
+    titleInput.required = true;
+    const messageInput = document.createElement('textarea');
+    messageInput.maxLength = 4000;
+    messageInput.placeholder = 'Write an announcement';
+    messageInput.setAttribute('aria-label', 'Announcement message');
+    messageInput.required = true;
+    const status = document.createElement('p');
+    status.setAttribute('aria-live', 'polite');
+    const submitButton = document.createElement('button');
+    submitButton.type = 'submit';
+    submitButton.className = 'submit-btn';
+    submitButton.style.width = 'fit-content';
+    submitButton.textContent = 'Post announcement';
+    form.append(heading, titleInput, messageInput, submitButton, status);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      publishCourseAnnouncement(course.id, titleInput, messageInput, submitButton, status);
+    });
+    return form;
+  }
+
+  async function publishCourseAnnouncement(
+    courseId,
+    titleInput,
+    messageInput,
+    submitButton,
+    status,
+  ) {
+    submitButton.disabled = true;
+    status.textContent = 'Publishing announcement...';
+    try {
+      const response = await fetch(
+        `/trainer/courses/${encodeURIComponent(courseId)}/announcements`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: titleInput.value.trim(),
+            message: messageInput.value.trim(),
+          }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not publish announcement.');
+      titleInput.value = '';
+      messageInput.value = '';
+      status.textContent = 'Announcement published for enrolled students.';
+    } catch (error) {
+      status.textContent = error.message || 'Could not publish announcement.';
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
   /* Trainer Dashboard Render & Course Assignment */
   async function renderTrainerDashboard() {
     const token = localStorage.getItem('jwt_token');
@@ -3619,6 +3839,7 @@
         summary.className = 'trainer-course-summary';
         summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} day(s)`;
         section.appendChild(summary);
+        section.appendChild(createCourseAnnouncementForm(course));
         const lessons = document.createElement('div');
         lessons.className = 'trainer-lessons';
         (course.modules || []).forEach((module, index) => {

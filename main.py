@@ -10,7 +10,7 @@ import json
 import time
 from datetime import timezone, timedelta
 from typing import Optional
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 import uuid
 
 from fastapi import FastAPI, Depends, HTTPException, Form, Request
@@ -155,15 +155,15 @@ DAY_ONE_WEBSITES = (
     {"key": "webconverts", "name": "Webconverts", "url": "https://webconverts.com/"},
 )
 DAY_ONE_QUESTIONS = (
-    {"key": "website_working", "label": "Is the website working?"},
-    {"key": "home_page", "label": "Is the home page working?"},
-    {"key": "about_page", "label": "Is the About page working?"},
-    {"key": "phone_number", "label": "Is the phone number present and working?"},
-    {"key": "email", "label": "Is the email address present and working?"},
-    {"key": "google_map", "label": "Is the Google Map available and working?"},
-    {"key": "form", "label": "Is a contact form available and working?"},
-    {"key": "thank_you_page", "label": "Is the Thank You page available after form submission?"},
-    {"key": "social_media", "label": "Is social media integration available and working?"},
+    {"key": "website_working", "label": "Is the website working?", "path": "/"},
+    {"key": "home_page", "label": "Is the home page working?", "path": "/"},
+    {"key": "about_page", "label": "Is the About page working?", "path": "/about-us/"},
+    {"key": "phone_number", "label": "Is the phone number present and working?", "path": "/contact-us/"},
+    {"key": "email", "label": "Is the email address present and working?", "path": "/contact-us/"},
+    {"key": "google_map", "label": "Is the Google Map available and working?", "path": "/contact-us/#map"},
+    {"key": "form", "label": "Is a contact form available and working?", "path": "/contact-us/#contact-form"},
+    {"key": "thank_you_page", "label": "Is the Thank You page available after form submission?", "path": "/thank-you/"},
+    {"key": "social_media", "label": "Is social media integration available and working?", "path": "/#social-media"},
 )
 DAILY_TASK_KEYWORDS = (
     "dental clinic in vasanth nagar",
@@ -1261,6 +1261,135 @@ def reply_to_lesson_question(
     return _lesson_question_payload(question)
 
 
+def _student_announcement_enrollment(
+    db: Session,
+    current_user: models.User,
+    enrollment_id: str,
+) -> models.Enrollment:
+    if not current_user.is_access_granted:
+        raise HTTPException(status_code=403, detail="Your account is awaiting clearance.")
+    enrollment = db.query(models.Enrollment).filter_by(
+        id=enrollment_id,
+        student_id=current_user.id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found.")
+    return enrollment
+
+
+def _unread_announcement_count(
+    db: Session,
+    course_id: str,
+    student_id: str,
+) -> int:
+    total_count = db.query(func.count(models.Announcement.id)).filter_by(
+        course_id=course_id,
+    ).scalar() or 0
+    read_count = db.query(func.count(models.AnnouncementRead.announcement_id)).join(
+        models.Announcement,
+        models.Announcement.id == models.AnnouncementRead.announcement_id,
+    ).filter(
+        models.Announcement.course_id == course_id,
+        models.AnnouncementRead.student_id == student_id,
+    ).scalar() or 0
+    return total_count - read_count
+
+
+@app.get("/student/enrollments/{enrollment_id}/announcements/unread-count")
+def student_announcement_unread_count(
+    enrollment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    enrollment = _student_announcement_enrollment(db, current_user, enrollment_id)
+    return {
+        "unread_count": _unread_announcement_count(
+            db,
+            enrollment.course_id,
+            current_user.id,
+        ),
+    }
+
+
+@app.get("/student/enrollments/{enrollment_id}/announcements")
+def student_announcements(
+    enrollment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    enrollment = _student_announcement_enrollment(db, current_user, enrollment_id)
+    announcements = db.query(models.Announcement).filter_by(
+        course_id=enrollment.course_id,
+    ).order_by(models.Announcement.created_at.desc()).all()
+    read_ids = {
+        receipt.announcement_id
+        for receipt in db.query(models.AnnouncementRead).join(
+            models.Announcement,
+            models.Announcement.id == models.AnnouncementRead.announcement_id,
+        ).filter(
+            models.Announcement.course_id == enrollment.course_id,
+            models.AnnouncementRead.student_id == current_user.id,
+        ).all()
+    }
+    return {
+        "announcements": [
+            {
+                "id": announcement.id,
+                "title": announcement.title,
+                "message": announcement.message,
+                "created_at": announcement.created_at.isoformat(),
+                "is_read": announcement.id in read_ids,
+            }
+            for announcement in announcements
+        ],
+        "unread_count": _unread_announcement_count(
+            db,
+            enrollment.course_id,
+            current_user.id,
+        ),
+    }
+
+
+@app.post("/student/enrollments/{enrollment_id}/announcements/read")
+def mark_student_announcements_read(
+    enrollment_id: str,
+    payload: schemas.AnnouncementReadRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    enrollment = _student_announcement_enrollment(db, current_user, enrollment_id)
+    announcement_ids = set(payload.announcement_ids)
+    announcements = db.query(models.Announcement).filter(
+        models.Announcement.course_id == enrollment.course_id,
+        models.Announcement.id.in_(announcement_ids),
+    ).all()
+    if len(announcements) != len(announcement_ids):
+        raise HTTPException(status_code=404, detail="One or more announcements were not found.")
+
+    existing_ids = {
+        receipt.announcement_id
+        for receipt in db.query(models.AnnouncementRead).filter(
+            models.AnnouncementRead.student_id == current_user.id,
+            models.AnnouncementRead.announcement_id.in_(announcement_ids),
+        ).all()
+    }
+    db.add_all(
+        models.AnnouncementRead(
+            announcement_id=announcement_id,
+            student_id=current_user.id,
+        )
+        for announcement_id in announcement_ids - existing_ids
+    )
+    db.commit()
+    return {
+        "unread_count": _unread_announcement_count(
+            db,
+            enrollment.course_id,
+            current_user.id,
+        ),
+    }
+
+
 @app.post("/integrations/assignment-completed")
 async def assignment_completion_webhook(
     request: Request,
@@ -1972,6 +2101,42 @@ def create_trainer_course(
         "course_id": course.id,
         "title": course.title,
         "module_count": 12,
+    }
+
+
+@app.post("/trainer/courses/{course_id}/announcements", status_code=201)
+def create_course_announcement(
+    course_id: str,
+    payload: schemas.AnnouncementCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    course = db.query(models.Course).filter_by(
+        id=course_id,
+        trainer_id=current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    title = payload.title.strip()
+    message = payload.message.strip()
+    if not title or not message:
+        raise HTTPException(status_code=422, detail="Announcement title and message cannot be empty.")
+
+    announcement = models.Announcement(
+        id=str(uuid.uuid4()),
+        course_id=course.id,
+        trainer_id=current_user.id,
+        title=title,
+        message=message,
+    )
+    db.add(announcement)
+    db.commit()
+    db.refresh(announcement)
+    return {
+        "id": announcement.id,
+        "title": announcement.title,
+        "message": announcement.message,
+        "created_at": announcement.created_at.isoformat(),
     }
 
 

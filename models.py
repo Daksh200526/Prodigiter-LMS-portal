@@ -66,6 +66,11 @@ class Course(Base):
         back_populates="course",
         cascade="all, delete-orphan",
     )
+    announcements = relationship(
+        "Announcement",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
 
 
 class Module(Base):
@@ -118,6 +123,35 @@ class CourseAccessRequest(Base):
 
     student = relationship("User", back_populates="course_access_requests")
     course = relationship("Course", back_populates="access_requests")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    course_id = Column(String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    trainer_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(150), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    course = relationship("Course", back_populates="announcements")
+
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+
+    announcement_id = Column(
+        String(36),
+        ForeignKey("announcements.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    student_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    read_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class StudentProgress(Base):

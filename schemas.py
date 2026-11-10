@@ -54,6 +54,13 @@ class LessonQuestionCreate(BaseModel):
 class LessonQuestionReply(BaseModel):
     reply: str = Field(min_length=1, max_length=2000)
 
+class AnnouncementCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=150)
+    message: str = Field(min_length=1, max_length=4000)
+
+class AnnouncementReadRequest(BaseModel):
+    announcement_ids: List[str] = Field(min_length=1, max_length=1000)
+
 class TaskReviewAnswers(BaseModel):
     answers: Dict[str, str]
 

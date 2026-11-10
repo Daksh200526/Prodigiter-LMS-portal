@@ -68,6 +68,9 @@ class TestLMSAPI(unittest.TestCase):
         self.assertIn('<option value="Python Programming">Python Programming</option>', response.text)
         self.assertIn('<option value="Data Science">Data Science</option>', response.text)
         self.assertNotIn('<option value="Java Programming">', response.text)
+        self.assertIn('id="student-announcements-button"', response.text)
+        self.assertIn('id="student-announcements-modal"', response.text)
+        self.assertIn('function createCourseAnnouncementForm(course)', response.text)
 
     def test_student_registration_and_login(self):
         email = "newstudent@example.com"
@@ -192,6 +195,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertNotIn("assignment_link", module)
             self.assertEqual(len(module["day_one"]["websites"]), 5)
             self.assertEqual(len(module["day_one"]["questions"]), 9)
+            self.assertEqual(module["day_one"]["questions"][2]["path"], "/about-us/")
         finally:
             db.close()
 
@@ -3383,6 +3387,122 @@ class TestLMSAPI(unittest.TestCase):
             self.assertTrue(auth.verify_password("NewPassword456", user.hashed_password))
         finally:
             db.close()
+
+    def test_course_announcements_are_published_and_tracked_as_unread_per_student(self):
+        db = self.testing_session_local()
+        trainer_id = str(uuid.uuid4())
+        other_trainer_id = str(uuid.uuid4())
+        student_id = str(uuid.uuid4())
+        other_student_id = str(uuid.uuid4())
+        course_id = str(uuid.uuid4())
+        enrollment_id = str(uuid.uuid4())
+        other_enrollment_id = str(uuid.uuid4())
+        try:
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Announcement Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            other_trainer = main.models.User(
+                id=other_trainer_id,
+                name="Other Trainer",
+                email=f"{other_trainer_id}@example.com",
+                role="trainer",
+            )
+            student = main.models.User(
+                id=student_id,
+                name="Announcement Student",
+                email=f"{student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            other_student = main.models.User(
+                id=other_student_id,
+                name="Other Student",
+                email=f"{other_student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            course = main.models.Course(
+                id=course_id,
+                title="Announcement Course",
+                trainer_id=trainer_id,
+            )
+            enrollments = [
+                main.models.Enrollment(
+                    id=enrollment_id,
+                    student_id=student_id,
+                    course_id=course_id,
+                ),
+                main.models.Enrollment(
+                    id=other_enrollment_id,
+                    student_id=other_student_id,
+                    course_id=course_id,
+                ),
+            ]
+            db.add_all([trainer, other_trainer, student, other_student, course, *enrollments])
+            db.commit()
+        finally:
+            db.close()
+
+        trainer_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': trainer_id, 'role': 'trainer'})}",
+        }
+        other_trainer_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': other_trainer_id, 'role': 'trainer'})}",
+        }
+        student_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': student_id, 'role': 'student'})}",
+        }
+        other_student_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': other_student_id, 'role': 'student'})}",
+        }
+        create_url = f"/trainer/courses/{course_id}/announcements"
+        first_announcement = self.client.post(
+            create_url,
+            json={"title": "Welcome", "message": "Please review the new schedule."},
+            headers=trainer_headers,
+        )
+        forbidden_announcement = self.client.post(
+            f"/trainer/courses/{str(uuid.uuid4())}/announcements",
+            json={"title": "Other course", "message": "Not allowed."},
+            headers=other_trainer_headers,
+        )
+        student_url = f"/student/enrollments/{enrollment_id}/announcements"
+        list_response = self.client.get(student_url, headers=student_headers)
+        other_student_count = self.client.get(
+            f"/student/enrollments/{other_enrollment_id}/announcements/unread-count",
+            headers=other_student_headers,
+        )
+        announcement_id = first_announcement.json()["id"]
+        mark_read = self.client.post(
+            f"{student_url}/read",
+            json={"announcement_ids": [announcement_id]},
+            headers=student_headers,
+        )
+        read_back = self.client.get(student_url, headers=student_headers)
+        new_announcement = self.client.post(
+            create_url,
+            json={"title": "Reminder", "message": "A new update is available."},
+            headers=trainer_headers,
+        )
+        updated_count = self.client.get(
+            f"/student/enrollments/{enrollment_id}/announcements/unread-count",
+            headers=student_headers,
+        )
+
+        self.assertEqual(first_announcement.status_code, 201, first_announcement.text)
+        self.assertEqual(forbidden_announcement.status_code, 404)
+        self.assertEqual(list_response.status_code, 200, list_response.text)
+        self.assertEqual(list_response.json()["unread_count"], 1)
+        self.assertFalse(list_response.json()["announcements"][0]["is_read"])
+        self.assertEqual(other_student_count.json()["unread_count"], 1)
+        self.assertEqual(mark_read.status_code, 200, mark_read.text)
+        self.assertEqual(mark_read.json()["unread_count"], 0)
+        self.assertTrue(read_back.json()["announcements"][0]["is_read"])
+        self.assertEqual(new_announcement.status_code, 201, new_announcement.text)
+        self.assertEqual(updated_count.json()["unread_count"], 1)
 
 
 if __name__ == "__main__":
