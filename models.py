@@ -91,6 +91,11 @@ class Module(Base):
         cascade="all, delete-orphan",
         order_by="LessonQuestion.created_at",
     )
+    student_assignment_instructions = relationship(
+        "StudentAssignmentInstruction",
+        back_populates="module",
+        cascade="all, delete-orphan",
+    )
 
 
 class Enrollment(Base):
@@ -106,6 +111,11 @@ class Enrollment(Base):
     student = relationship("User", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
     progress_list = relationship("StudentProgress", back_populates="enrollment", cascade="all, delete-orphan")
+    assignment_instructions = relationship(
+        "StudentAssignmentInstruction",
+        back_populates="enrollment",
+        cascade="all, delete-orphan",
+    )
 
 
 class CourseAccessRequest(Base):
@@ -123,6 +133,36 @@ class CourseAccessRequest(Base):
 
     student = relationship("User", back_populates="course_access_requests")
     course = relationship("Course", back_populates="access_requests")
+
+
+class StudentAssignmentInstruction(Base):
+    __tablename__ = "student_assignment_instructions"
+    __table_args__ = (
+        UniqueConstraint(
+            "enrollment_id",
+            "module_id",
+            name="uq_student_assignment_instruction_enrollment_module",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    enrollment_id = Column(
+        String(36),
+        ForeignKey("enrollments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    module_id = Column(
+        String(36),
+        ForeignKey("modules.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    instructions = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    enrollment = relationship("Enrollment", back_populates="assignment_instructions")
+    module = relationship("Module", back_populates="student_assignment_instructions")
 
 
 class Announcement(Base):

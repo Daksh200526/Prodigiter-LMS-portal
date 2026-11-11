@@ -562,6 +562,11 @@
       margin-top: 0.75rem;
       overflow-x: auto;
     }
+    .trainer-view-assignments-btn {
+      width: calc(100% - 1.5rem);
+      margin: 0.75rem;
+      text-align: left;
+    }
     .trainer-course-list,
     #trainer-course-navigation {
       display: flex;
@@ -1218,7 +1223,7 @@
     <aside class="lessons-sidebar" aria-label="Trainer navigation">
       <div class="sidebar-header">Trainer Dashboard</div>
       <div class="trainer-sidebar-actions">
-        <button type="button" class="submit-btn" onclick="openAddLessonModal()">Add day to a course</button>
+        <button type="button" class="submit-btn" onclick="openAddLessonModal()">Add lessons to a course</button>
         <button type="button" class="profile-link-btn" onclick="openNewCourseModal()">Create a course</button>
       </div>
       <details class="trainer-sidebar-section">
@@ -1229,6 +1234,8 @@
         <summary>Assign courses to students</summary>
         <div id="trainer-assign-students-container">Loading students...</div>
       </details>
+      <button type="button" class="profile-link-btn trainer-view-assignments-btn"
+        onclick="openTrainerAssignments()">View assignments</button>
       <div class="sidebar-header">Your courses</div>
       <nav id="trainer-course-list" class="trainer-course-list" aria-label="Your courses">
         Loading courses...
@@ -1334,6 +1341,36 @@
       <button type="submit" class="submit-btn">Add day</button>
     </form>
   </div>
+</div>
+
+<div id="trainer-assignments-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true"
+  aria-labelledby="trainer-assignments-title">
+  <section class="modal-box trainer-modal-box">
+    <button type="button" class="modal-close-btn" aria-label="Close assignments"
+      onclick="closeTrainerModal('trainer-assignments-modal')">&times;</button>
+    <h3 id="trainer-assignments-title">View assignments</h3>
+    <p>Day 1 instructions are shared by everyone in the course. Later days can be customized for each student.</p>
+    <div class="form-group">
+      <label for="trainer-assignment-course">Course</label>
+      <select id="trainer-assignment-course" onchange="updateTrainerAssignmentEditor()"></select>
+    </div>
+    <div class="form-group">
+      <label for="trainer-assignment-day">Day</label>
+      <select id="trainer-assignment-day" onchange="updateTrainerAssignmentEditor()"></select>
+    </div>
+    <div id="trainer-assignment-student-group" class="form-group">
+      <label for="trainer-assignment-student">Student</label>
+      <select id="trainer-assignment-student" onchange="updateTrainerAssignmentEditor()"></select>
+    </div>
+    <div class="form-group">
+      <label for="trainer-assignment-instructions">Assignment instructions</label>
+      <textarea id="trainer-assignment-instructions" maxlength="4000" rows="6"></textarea>
+      <small id="trainer-assignment-help"></small>
+    </div>
+    <button id="trainer-assignment-save" type="button" class="submit-btn"
+      onclick="saveTrainerAssignmentInstructions()">Save instructions</button>
+    <p id="trainer-assignment-status" aria-live="polite"></p>
+  </section>
 </div>
 
 <script>
@@ -2472,8 +2509,8 @@
 
     const instructions = document.createElement('p');
     instructions.className = 'day-one-notice';
-    instructions.textContent =
-      'Open each website, inspect it, and answer its checks in order. The next website unlocks after all checks for the current one are answered.';
+    instructions.textContent = module.assignment_prompt
+      || 'Open each website, inspect it, and answer its checks in order. The next website unlocks after all checks for the current one are answered.';
     container.appendChild(instructions);
 
     const websiteTabs = document.createElement('div');
@@ -2663,6 +2700,12 @@
     instructions.textContent =
       'Complete the three tasks in order. Enter “Not found” when ranking or competitor information is unavailable. The review QR code appears after all tasks are complete.';
     container.appendChild(instructions);
+    if (module.has_custom_assignment_instructions && module.assignment_prompt) {
+      const trainerInstructions = document.createElement('p');
+      trainerInstructions.className = 'day-one-notice';
+      trainerInstructions.textContent = `Additional trainer instructions: ${module.assignment_prompt}`;
+      container.appendChild(trainerInstructions);
+    }
 
     const tabs = document.createElement('div');
     tabs.className = 'daily-task-tabs';
@@ -4102,6 +4145,160 @@
     lessonCard.appendChild(questionsSection);
     section.appendChild(lessonCard);
     courseContainer.appendChild(section);
+  }
+
+  function openTrainerAssignments() {
+    const courseSelect = document.getElementById('trainer-assignment-course');
+    const courses = trainerDashboardData.courses || [];
+    courseSelect.replaceChildren();
+    courses.forEach(course => {
+      const option = document.createElement('option');
+      option.value = course.id;
+      option.textContent = course.title;
+      courseSelect.appendChild(option);
+    });
+    courseSelect.value = activeTrainerCourseId || (courses[0] && courses[0].id) || '';
+    document.getElementById('trainer-assignment-status').textContent = '';
+    document.getElementById('trainer-assignments-modal').classList.remove('hidden');
+    updateTrainerAssignmentEditor(true);
+  }
+
+  function updateTrainerAssignmentEditor(resetDays = false) {
+    const course = (trainerDashboardData.courses || []).find(
+      item => item.id === document.getElementById('trainer-assignment-course').value
+    );
+    const daySelect = document.getElementById('trainer-assignment-day');
+    const studentSelect = document.getElementById('trainer-assignment-student');
+    const studentGroup = document.getElementById('trainer-assignment-student-group');
+    const instructionsInput = document.getElementById('trainer-assignment-instructions');
+    const help = document.getElementById('trainer-assignment-help');
+    const saveButton = document.getElementById('trainer-assignment-save');
+    const status = document.getElementById('trainer-assignment-status');
+    const previousEnrollmentId = studentSelect.value;
+    const previousModuleId = daySelect.value;
+    status.textContent = '';
+    daySelect.replaceChildren();
+    studentSelect.replaceChildren();
+
+    if (!course || !course.modules || course.modules.length === 0) {
+      instructionsInput.value = '';
+      instructionsInput.disabled = true;
+      saveButton.disabled = true;
+      help.textContent = 'This course does not have any days yet.';
+      return;
+    }
+
+    course.modules.forEach((module, index) => {
+      const option = document.createElement('option');
+      option.value = module.module_id;
+      option.textContent = `Day ${module.order_index || index + 1}`;
+      daySelect.appendChild(option);
+    });
+    const selectedModule = resetDays
+      ? course.modules.find(module => module.module_id === activeTrainerModuleId)
+      : course.modules.find(module => module.module_id === previousModuleId);
+    daySelect.value = (selectedModule || course.modules[0]).module_id;
+    const module = course.modules.find(item => item.module_id === daySelect.value)
+      || course.modules[0];
+    const isSharedDay = module.order_index === 1;
+    studentGroup.classList.toggle('hidden', isSharedDay);
+    studentSelect.disabled = isSharedDay;
+    if (!isSharedDay) {
+      (course.students || []).forEach(student => {
+        const option = document.createElement('option');
+        option.value = student.enrollment_id;
+        option.textContent = `${student.student_name} (${student.student_email})`;
+        studentSelect.appendChild(option);
+      });
+      if ((course.students || []).some(
+        student => student.enrollment_id === previousEnrollmentId
+      )) {
+        studentSelect.value = previousEnrollmentId;
+      }
+    }
+
+    const hasStudent = isSharedDay || Boolean(studentSelect.value);
+    const student = (course.students || []).find(
+      item => item.enrollment_id === studentSelect.value
+    );
+    const studentModule = student && (student.modules || []).find(
+      item => item.module_id === module.module_id
+    );
+    instructionsInput.value = isSharedDay
+      ? module.assignment_prompt || ''
+      : studentModule && studentModule.assignment_prompt || '';
+    instructionsInput.disabled = !hasStudent;
+    saveButton.disabled = !hasStudent;
+    help.textContent = isSharedDay
+      ? 'Shared instruction: changes apply to every student in this course.'
+      : hasStudent
+        ? 'Personal instruction: leave blank to restore this day’s default for the selected student.'
+        : 'Enroll a student in this course before adding personal instructions.';
+  }
+
+  async function saveTrainerAssignmentInstructions() {
+    const course = (trainerDashboardData.courses || []).find(
+      item => item.id === document.getElementById('trainer-assignment-course').value
+    );
+    const moduleId = document.getElementById('trainer-assignment-day').value;
+    const module = course && (course.modules || []).find(
+      item => item.module_id === moduleId
+    );
+    if (!course || !module) return;
+
+    const shared = module.order_index === 1;
+    const student = shared
+      ? null
+      : (course.students || []).find(
+        item => item.enrollment_id === document.getElementById('trainer-assignment-student').value
+      );
+    if (!shared && !student) return;
+
+    const saveButton = document.getElementById('trainer-assignment-save');
+    const status = document.getElementById('trainer-assignment-status');
+    saveButton.disabled = true;
+    status.textContent = 'Saving assignment instructions...';
+    try {
+      const response = await fetch(
+        `/trainer/courses/${encodeURIComponent(course.id)}/modules/${encodeURIComponent(module.module_id)}/assignment-instructions`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            enrollment_id: student ? student.enrollment_id : null,
+            instructions: document.getElementById('trainer-assignment-instructions').value,
+          }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Could not save assignment instructions.');
+      }
+
+      if (shared) {
+        module.assignment_prompt = data.instructions;
+        (course.students || []).forEach(enrolledStudent => {
+          const studentModule = (enrolledStudent.modules || []).find(
+            item => item.module_id === module.module_id
+          );
+          if (studentModule) studentModule.assignment_prompt = data.instructions;
+        });
+      } else {
+        const studentModule = (student.modules || []).find(
+          item => item.module_id === module.module_id
+        );
+        if (studentModule) studentModule.assignment_prompt = data.instructions;
+      }
+      document.getElementById('trainer-assignment-instructions').value = data.instructions;
+      status.textContent = 'Assignment instructions saved.';
+    } catch (error) {
+      status.textContent = error.message || 'Could not save assignment instructions.';
+    } finally {
+      saveButton.disabled = false;
+    }
   }
 
   async function loadTrainerStudentAssignmentPanel() {

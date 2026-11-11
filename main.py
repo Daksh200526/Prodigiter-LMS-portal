@@ -630,6 +630,7 @@ def student_dashboard(
             models.LessonQuestion.student
         ),
         selectinload(models.Enrollment.progress_list),
+        selectinload(models.Enrollment.assignment_instructions),
     ).filter_by(student_id=current_user.id).all()
     courses_data = []
 
@@ -639,6 +640,10 @@ def student_dashboard(
         modules = enr.course.modules
         progress_by_module = {
             progress.module_id: progress for progress in enr.progress_list
+        }
+        assignment_instructions_by_module = {
+            instruction.module_id: instruction.instructions
+            for instruction in enr.assignment_instructions
         }
         modules_list = []
         completed_count = 0
@@ -691,13 +696,19 @@ def student_dashboard(
                     else None
                 ),
                 "assignment_prompt": (
-                    "Complete the website checks for each site."
+                    mod.assignment_prompt or "Complete the website checks for each site."
                     if mod.order_index == 1
                     else (
-                        "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                        assignment_instructions_by_module.get(mod.id)
+                        or mod.assignment_prompt
+                        or "Complete the keyword rankings, competitor analysis, and three social posts in order."
                         if is_daily_task_day
                         else mod.assignment_prompt or ""
                     )
+                ),
+                "has_custom_assignment_instructions": (
+                    mod.order_index != 1
+                    and mod.id in assignment_instructions_by_module
                 ),
                 "is_unlocked": is_unlocked,
                 "lock_reason": lock_reason,
@@ -1955,6 +1966,9 @@ def trainer_dashboard(
         ),
         selectinload(models.Course.enrollments).selectinload(models.Enrollment.student),
         selectinload(models.Course.enrollments).selectinload(models.Enrollment.progress_list),
+        selectinload(models.Course.enrollments).selectinload(
+            models.Enrollment.assignment_instructions
+        ),
     ).filter_by(trainer_id=current_user.id).all()
     courses_payload = []
 
@@ -1965,6 +1979,10 @@ def trainer_dashboard(
         for e in enrollments:
             progress_by_module = {
                 progress.module_id: progress for progress in e.progress_list
+            }
+            assignment_instructions_by_module = {
+                instruction.module_id: instruction.instructions
+                for instruction in e.assignment_instructions
             }
             completed_count = sum(
                 1 for module in modules
@@ -1984,6 +2002,12 @@ def trainer_dashboard(
                 module_progress.append({
                     "module_id": module.id,
                     "title": f"Day {module.order_index}",
+                    "assignment_prompt": (
+                        module.assignment_prompt
+                        if module.order_index == 1
+                        else assignment_instructions_by_module.get(module.id)
+                        or module.assignment_prompt
+                    ),
                     "assignment_status": (
                         "completed" if _day_one_complete(progress) else "not_started"
                     ) if module.order_index == 1 else (
@@ -2001,6 +2025,7 @@ def trainer_dashboard(
                     ),
                 })
             student_records.append({
+                "enrollment_id": e.id,
                 "student_id": e.student.id if e.student else None,
                 "student_name": e.student.name if e.student else "Student",
                 "student_email": e.student.email if e.student else "N/A",
@@ -2101,6 +2126,84 @@ def create_trainer_course(
         "course_id": course.id,
         "title": course.title,
         "module_count": 12,
+    }
+
+
+@app.put(
+    "/trainer/courses/{course_id}/modules/{module_id}/assignment-instructions"
+)
+def update_trainer_assignment_instructions(
+    course_id: str,
+    module_id: str,
+    payload: schemas.TrainerAssignmentInstructionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    course = db.query(models.Course).filter_by(
+        id=course_id,
+        trainer_id=current_user.id,
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    module = db.query(models.Module).filter_by(
+        id=module_id,
+        course_id=course.id,
+    ).first()
+    if not module:
+        raise HTTPException(status_code=404, detail="Course day not found.")
+
+    instructions = payload.instructions.strip()
+    if module.order_index == 1:
+        if payload.enrollment_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Day 1 instructions are shared by all enrolled students.",
+            )
+        if not instructions:
+            raise HTTPException(
+                status_code=422,
+                detail="Shared Day 1 instructions cannot be empty.",
+            )
+        module.assignment_prompt = instructions
+    else:
+        if not payload.enrollment_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Choose a student to edit this day's assignment.",
+            )
+        enrollment = db.query(models.Enrollment).filter_by(
+            id=payload.enrollment_id,
+            course_id=course.id,
+        ).first()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Student enrollment not found.")
+
+        assignment_instruction = db.query(
+            models.StudentAssignmentInstruction
+        ).filter_by(
+            enrollment_id=enrollment.id,
+            module_id=module.id,
+        ).first()
+        if instructions:
+            if assignment_instruction:
+                assignment_instruction.instructions = instructions
+            else:
+                db.add(models.StudentAssignmentInstruction(
+                    id=str(uuid.uuid4()),
+                    enrollment_id=enrollment.id,
+                    module_id=module.id,
+                    instructions=instructions,
+                ))
+        elif assignment_instruction:
+            db.delete(assignment_instruction)
+
+    db.commit()
+    return {
+        "instructions": (
+            instructions
+            or module.assignment_prompt
+        ),
+        "shared": module.order_index == 1,
     }
 
 

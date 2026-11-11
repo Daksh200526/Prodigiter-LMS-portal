@@ -74,6 +74,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertNotIn("Announcement title", response.text)
         self.assertIn('id="trainer-course-navigation"', response.text)
         self.assertIn('class="student-layout trainer-dashboard hidden"', response.text)
+        self.assertIn('onclick="openTrainerAssignments()">View assignments</button>', response.text)
         self.assertIn("Review submitted student responses and provide a decision.", response.text)
 
     def test_student_registration_and_login(self):
@@ -194,7 +195,10 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(dashboard_response.status_code, 200)
             module = dashboard_response.json()["courses"][0]["modules"][0]
             self.assertEqual(module["title"], "Day 1")
-            self.assertEqual(module["assignment_prompt"], "Complete the website checks for each site.")
+            self.assertEqual(
+                module["assignment_prompt"],
+                "This legacy prompt is not shown for Day 1.",
+            )
             self.assertIsNone(module["video_url"])
             self.assertNotIn("assignment_link", module)
             self.assertEqual(len(module["day_one"]["websites"]), 5)
@@ -3391,6 +3395,187 @@ class TestLMSAPI(unittest.TestCase):
             self.assertTrue(auth.verify_password("NewPassword456", user.hashed_password))
         finally:
             db.close()
+
+    def test_trainer_assignment_instructions_are_shared_on_day_one_and_personal_afterward(self):
+        trainer_id = str(uuid.uuid4())
+        other_trainer_id = str(uuid.uuid4())
+        student_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+        course_id = str(uuid.uuid4())
+        module_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+        enrollment_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+        db = self.testing_session_local()
+        try:
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Assignment Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            other_trainer = main.models.User(
+                id=other_trainer_id,
+                name="Other Assignment Trainer",
+                email=f"{other_trainer_id}@example.com",
+                role="trainer",
+            )
+            students = [
+                main.models.User(
+                    id=student_id,
+                    name=f"Assignment Student {index + 1}",
+                    email=f"{student_id}@example.com",
+                    role="student",
+                    is_access_granted=True,
+                )
+                for index, student_id in enumerate(student_ids)
+            ]
+            course = main.models.Course(
+                id=course_id,
+                title="Assignment Instructions Course",
+                trainer_id=trainer_id,
+            )
+            modules = [
+                main.models.Module(
+                    id=module_ids[0],
+                    course_id=course_id,
+                    order_index=1,
+                    title="Day 1",
+                    video_url="",
+                    assignment_prompt="Default shared Day 1 instructions.",
+                ),
+                main.models.Module(
+                    id=module_ids[1],
+                    course_id=course_id,
+                    order_index=2,
+                    title="Day 2",
+                    video_url="",
+                    assignment_prompt=(
+                        "Complete the keyword rankings, competitor analysis, "
+                        "and three social posts in order."
+                    ),
+                ),
+            ]
+            enrollments = [
+                main.models.Enrollment(
+                    id=enrollment_id,
+                    student_id=student_id,
+                    course_id=course_id,
+                )
+                for enrollment_id, student_id in zip(enrollment_ids, student_ids)
+            ]
+            db.add_all([
+                trainer,
+                other_trainer,
+                *students,
+                course,
+                *modules,
+                *enrollments,
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        trainer_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': trainer_id, 'role': 'trainer'})}",
+        }
+        other_trainer_headers = {
+            "Authorization": f"Bearer {auth.create_access_token({'sub': other_trainer_id, 'role': 'trainer'})}",
+        }
+        day_one_url = (
+            f"/trainer/courses/{course_id}/modules/{module_ids[0]}"
+            "/assignment-instructions"
+        )
+        day_two_url = (
+            f"/trainer/courses/{course_id}/modules/{module_ids[1]}"
+            "/assignment-instructions"
+        )
+        shared_update = self.client.put(
+            day_one_url,
+            json={"instructions": "Follow the shared Day 1 checklist."},
+            headers=trainer_headers,
+        )
+        personal_update = self.client.put(
+            day_two_url,
+            json={
+                "enrollment_id": enrollment_ids[0],
+                "instructions": "Focus on the assigned local business.",
+            },
+            headers=trainer_headers,
+        )
+        forbidden_update = self.client.put(
+            day_two_url,
+            json={
+                "enrollment_id": enrollment_ids[0],
+                "instructions": "Not allowed.",
+            },
+            headers=other_trainer_headers,
+        )
+        first_student_dashboard = self.client.get(
+            "/student/dashboard",
+            headers={
+                "Authorization": (
+                    f"Bearer {auth.create_access_token({'sub': student_ids[0], 'role': 'student'})}"
+                ),
+            },
+        )
+        second_student_dashboard = self.client.get(
+            "/student/dashboard",
+            headers={
+                "Authorization": (
+                    f"Bearer {auth.create_access_token({'sub': student_ids[1], 'role': 'student'})}"
+                ),
+            },
+        )
+        trainer_dashboard = self.client.get("/trainer/dashboard", headers=trainer_headers)
+
+        self.assertEqual(shared_update.status_code, 200, shared_update.text)
+        self.assertTrue(shared_update.json()["shared"])
+        self.assertEqual(personal_update.status_code, 200, personal_update.text)
+        self.assertFalse(personal_update.json()["shared"])
+        self.assertEqual(forbidden_update.status_code, 404)
+        first_modules = first_student_dashboard.json()["courses"][0]["modules"]
+        second_modules = second_student_dashboard.json()["courses"][0]["modules"]
+        self.assertEqual(first_modules[0]["assignment_prompt"], "Follow the shared Day 1 checklist.")
+        self.assertEqual(second_modules[0]["assignment_prompt"], "Follow the shared Day 1 checklist.")
+        self.assertEqual(first_modules[1]["assignment_prompt"], "Focus on the assigned local business.")
+        self.assertTrue(first_modules[1]["has_custom_assignment_instructions"])
+        self.assertEqual(
+            second_modules[1]["assignment_prompt"],
+            "Complete the keyword rankings, competitor analysis, and three social posts in order.",
+        )
+        trainer_students = trainer_dashboard.json()["courses"][0]["students"]
+        first_trainer_student = next(
+            student for student in trainer_students
+            if student["enrollment_id"] == enrollment_ids[0]
+        )
+        self.assertEqual(
+            first_trainer_student["modules"][1]["assignment_prompt"],
+            "Focus on the assigned local business.",
+        )
+        reset_personal_update = self.client.put(
+            day_two_url,
+            json={
+                "enrollment_id": enrollment_ids[0],
+                "instructions": "   ",
+            },
+            headers=trainer_headers,
+        )
+        reset_student_dashboard = self.client.get(
+            "/student/dashboard",
+            headers={
+                "Authorization": (
+                    f"Bearer {auth.create_access_token({'sub': student_ids[0], 'role': 'student'})}"
+                ),
+            },
+        )
+        self.assertEqual(reset_personal_update.status_code, 200, reset_personal_update.text)
+        self.assertEqual(
+            reset_student_dashboard.json()["courses"][0]["modules"][1]["assignment_prompt"],
+            "Complete the keyword rankings, competitor analysis, and three social posts in order.",
+        )
+        self.assertFalse(
+            reset_student_dashboard.json()["courses"][0]["modules"][1][
+                "has_custom_assignment_instructions"
+            ]
+        )
 
     def test_course_announcements_are_published_and_tracked_as_unread_per_student(self):
         db = self.testing_session_local()

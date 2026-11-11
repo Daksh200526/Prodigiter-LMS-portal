@@ -48,6 +48,10 @@ class AssignmentEvaluation(BaseModel):
     is_approved: bool
     feedback: Optional[str] = ""
 
+class TrainerAssignmentInstructionUpdate(BaseModel):
+    enrollment_id: Optional[str] = None
+    instructions: str = Field(max_length=4000)
+
 class LessonQuestionCreate(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
 
