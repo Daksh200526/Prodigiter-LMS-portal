@@ -525,14 +525,77 @@
       cursor: pointer;
       color: var(--text-muted);
     }
-    .trainer-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(330px, 400px);
-      gap: 1.5rem;
-      align-items: start;
+    .trainer-dashboard {
+      align-items: stretch;
     }
-    #trainer-courses {
+    .trainer-dashboard .lessons-sidebar {
+      max-height: calc(100vh - 7rem);
+      overflow-y: auto;
+      position: sticky;
+      top: 5rem;
+    }
+    .trainer-dashboard .video-workspace {
       min-width: 0;
+    }
+    .trainer-sidebar-actions {
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.75rem;
+    }
+    .trainer-sidebar-actions button {
+      width: 100%;
+      margin: 0;
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+    }
+    .trainer-sidebar-section {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .trainer-sidebar-section summary,
+    .trainer-students-details summary {
+      color: var(--text);
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .trainer-sidebar-section[open] > div {
+      margin-top: 0.75rem;
+      overflow-x: auto;
+    }
+    .trainer-course-list,
+    #trainer-course-navigation {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.5rem;
+    }
+    .trainer-course-choice,
+    .trainer-day-tab {
+      width: 100%;
+      min-width: 0;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-muted);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .trainer-course-choice:hover,
+    .trainer-day-tab:hover {
+      background: var(--surface-hover);
+    }
+    .trainer-course-choice[aria-current="true"],
+    .trainer-day-tab[aria-selected="true"] {
+      border-color: var(--primary);
+      background: var(--accent-soft);
+    }
+    .trainer-course-days-heading {
+      padding: 0.75rem 1rem 0.25rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 650;
     }
     .trainer-course-card,
     .trainer-pending-section {
@@ -563,42 +626,34 @@
       gap: 1rem;
       min-width: 0;
     }
-    .trainer-course-workspace {
-      display: grid;
-      grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
-      gap: 1rem;
-      align-items: start;
+    .trainer-course-card {
+      margin-top: 0;
     }
-    .trainer-day-navigation {
-      display: grid;
-      gap: 0.35rem;
-      max-height: 55vh;
-      overflow-y: auto;
-      padding: 0.5rem;
+    .trainer-course-heading {
+      margin-bottom: 1rem;
+    }
+    .trainer-course-heading h3 {
+      margin: 0 0 0.35rem;
+      text-align: left !important;
+    }
+    .trainer-course-heading .trainer-course-summary {
+      margin: 0;
+    }
+    .trainer-lesson-card > h4,
+    .trainer-lesson-questions > h5 {
+      margin: 0;
+      text-align: left !important;
+    }
+    .trainer-students-details {
+      margin-top: 1.25rem;
+      padding: 1rem 1.25rem;
       border: 1px solid var(--border);
       border-radius: 8px;
-      background: var(--card);
-    }
-    .trainer-day-tab {
-      width: 100%;
-      padding: 0.65rem 0.8rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
       background: var(--surface-muted);
-      color: var(--text);
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
     }
-    .trainer-day-tab:hover {
-      background: var(--surface-hover);
-    }
-    .trainer-day-tab[aria-selected="true"] {
-      border-color: var(--primary);
-      background: var(--accent-soft);
-    }
-    .trainer-lesson-panel[hidden] {
-      display: none;
+    .trainer-students-details[open] > div {
+      margin-top: 1rem;
+      overflow-x: auto;
     }
     .trainer-lesson-card,
     .trainer-question-card {
@@ -733,18 +788,6 @@
       gap: 0.5rem;
       margin-top: 0.75rem;
     }
-    .trainer-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      min-width: 0;
-    }
-    .trainer-action-btn {
-      width: 100%;
-      padding: 0.9rem 1rem;
-      text-align: left;
-      white-space: normal;
-    }
     .trainer-modal-box {
       max-width: 680px;
     }
@@ -854,23 +897,19 @@
       color: #fbbf24 !important;
     }
     @media (max-width: 760px) {
-      .trainer-layout {
-        grid-template-columns: 1fr;
-      }
-      .trainer-course-workspace {
-        grid-template-columns: 1fr;
-      }
-      .trainer-day-navigation {
-        display: flex;
+      .trainer-dashboard .lessons-sidebar {
+        position: static;
         max-height: none;
+      }
+      .trainer-course-list,
+      #trainer-course-navigation {
+        flex-direction: row;
         overflow-x: auto;
       }
+      .trainer-course-choice,
       .trainer-day-tab {
         width: auto;
         flex: 0 0 auto;
-      }
-      .trainer-actions {
-        grid-row: 1;
       }
       .student-layout {
         flex-direction: column;
@@ -1175,42 +1214,42 @@
   </div>
 
   <!-- Trainer View -->
-  <div id="trainer-view" class="card hidden">
-    <h3>Trainer Dashboard</h3>
-    
-    <!-- Course Assignment Section for Students under Trainer -->
-    <div class="card" style="margin-bottom: 1.5rem; background: #ffffff; border-color: #cbd5e1;">
-      <h4 style="margin-top: 0; margin-bottom: 0.35rem;">Course Assignment</h4>
-      <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 1rem;">
-        Review requests for your courses or directly assign one of your courses to any student.
-      </p>
-      <h5 style="margin: 0.75rem 0;">Course access requests</h5>
-      <div id="trainer-course-access-requests" style="margin-bottom: 1.25rem;">
-        Loading course access requests...
+  <div id="trainer-view" class="student-layout trainer-dashboard hidden">
+    <aside class="lessons-sidebar" aria-label="Trainer navigation">
+      <div class="sidebar-header">Trainer Dashboard</div>
+      <div class="trainer-sidebar-actions">
+        <button type="button" class="submit-btn" onclick="openAddLessonModal()">Add day to a course</button>
+        <button type="button" class="profile-link-btn" onclick="openNewCourseModal()">Create a course</button>
       </div>
-      <h5 style="margin: 0.75rem 0;">Assign a course directly</h5>
-      <div id="trainer-assign-students-container" style="overflow-x: auto;">
-        Loading students...
-      </div>
-    </div>
+      <details class="trainer-sidebar-section">
+        <summary>Course access requests</summary>
+        <div id="trainer-course-access-requests">Loading course access requests...</div>
+      </details>
+      <details class="trainer-sidebar-section">
+        <summary>Assign courses to students</summary>
+        <div id="trainer-assign-students-container">Loading students...</div>
+      </details>
+      <div class="sidebar-header">Your courses</div>
+      <nav id="trainer-course-list" class="trainer-course-list" aria-label="Your courses">
+        Loading courses...
+      </nav>
+      <div id="trainer-course-days-heading" class="trainer-course-days-heading">Course days</div>
+      <nav id="trainer-course-navigation" aria-label="Course days"></nav>
+    </aside>
 
-    <div class="trainer-layout">
-      <main id="trainer-courses">Loading student and assignment details...</main>
-      <aside class="trainer-actions" aria-label="Course actions">
-        <button type="button" class="submit-btn trainer-action-btn" onclick="openAddLessonModal()">
-          Add day to existing course
-        </button>
-        <button type="button" class="profile-link-btn trainer-action-btn" onclick="openNewCourseModal()">
-          Add new course
-        </button>
-        <section id="trainer-pending-assignments" class="trainer-pending-section" aria-labelledby="trainer-pending-heading">
-          <h4 id="trainer-pending-heading">Assignments awaiting evaluation</h4>
-          <p class="trainer-course-summary">Submitted student responses appear here for review.</p>
-          <p id="trainer-pending-status" class="trainer-course-summary">Loading pending assignments...</p>
-          <div id="trainer-pending-table-container"></div>
-        </section>
-      </aside>
-    </div>
+    <main class="video-workspace">
+      <section id="trainer-courses">Loading course and student details...</section>
+      <section id="trainer-pending-assignments" class="trainer-pending-section" aria-labelledby="trainer-pending-heading">
+        <h4 id="trainer-pending-heading">Assignments awaiting evaluation</h4>
+        <p class="trainer-course-summary">Review submitted student responses and provide a decision.</p>
+        <p id="trainer-pending-status" class="trainer-course-summary">Loading pending assignments...</p>
+        <div id="trainer-pending-table-container"></div>
+      </section>
+      <details class="trainer-students-details">
+        <summary>Students and progress</summary>
+        <div id="trainer-student-progress"></div>
+      </details>
+    </main>
   </div>
 </div>
 
@@ -1304,6 +1343,8 @@
   let studentCourseOptions = [];
   let youtubeApiPromise = null;
   let trainerDashboardData = { courses: [] };
+  let activeTrainerCourseId = null;
+  let activeTrainerModuleId = null;
   let studentLessonRefreshInProgress = false;
   let activeDayOneSiteIndex = 0;
   let activeDayOneQuestionIndex = 0;
@@ -1760,7 +1801,9 @@
 
     const appContainer = document.getElementById('auth-section').parentElement;
     appContainer.classList.remove('auth-container', 'student-container');
-    if (role === 'student') appContainer.classList.add('student-container');
+    if (role === 'student' || role === 'trainer') {
+      appContainer.classList.add('student-container');
+    }
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('logout-btn').classList.remove('hidden');
     const profileButton = document.getElementById('profile-btn');
@@ -3827,6 +3870,12 @@
       throw new Error(dashboard.detail || 'Failed to load trainer courses.');
     }
     trainerDashboardData = dashboard;
+    const courses = dashboard.courses || [];
+    if (!courses.some(course => course.id === activeTrainerCourseId)) {
+      activeTrainerCourseId = courses[0]?.id || null;
+      activeTrainerModuleId = null;
+    }
+
     const deletionRequestsResponse = await fetch('/trainer/deletion-requests', { headers });
     const deletionRequests = await deletionRequestsResponse.json();
     if (!deletionRequestsResponse.ok) {
@@ -3843,13 +3892,7 @@
         .map(request => request.student_id)
     );
 
-    courseContainer.replaceChildren();
-    const studentSection = document.createElement('section');
-    const studentsHeading = document.createElement('h4');
-    studentsHeading.textContent = 'Students and progress';
-    studentSection.appendChild(studentsHeading);
-    const studentsTable = document.createElement('div');
-    const students = (dashboard.courses || []).flatMap(course =>
+    const students = courses.flatMap(course =>
       (course.students || []).map(student => ({
         ...student,
         course_title: course.title,
@@ -3858,140 +3901,14 @@
     const deletionStates = new Map();
     pendingDeletionStudentIds.forEach(studentId => deletionStates.set(studentId, 'pending'));
     approvedDeletionStudentIds.forEach(studentId => deletionStates.set(studentId, 'approved'));
-    renderStudentTable(studentsTable, students, true, deletionStates);
-    studentSection.appendChild(studentsTable);
-    courseContainer.appendChild(studentSection);
-
-    if (!dashboard.courses || dashboard.courses.length === 0) {
-      const message = document.createElement('p');
-      message.textContent = 'You have not created any courses yet. Use “Add new course” to get started.';
-      courseContainer.appendChild(message);
-    } else {
-      dashboard.courses.forEach(course => {
-        const section = document.createElement('section');
-        section.className = 'trainer-course-card';
-        const title = document.createElement('h4');
-        title.textContent = course.title;
-        section.appendChild(title);
-        if (course.description) {
-          const description = document.createElement('p');
-          description.textContent = course.description;
-          section.appendChild(description);
-        }
-
-        const summary = document.createElement('p');
-        summary.className = 'trainer-course-summary';
-        summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} day(s)`;
-        section.appendChild(summary);
-        section.appendChild(createCourseAnnouncementForm(course));
-        const courseWorkspace = document.createElement('div');
-        courseWorkspace.className = 'trainer-course-workspace';
-        const dayNavigation = document.createElement('nav');
-        dayNavigation.className = 'trainer-day-navigation';
-        dayNavigation.setAttribute('role', 'tablist');
-        dayNavigation.setAttribute('aria-label', `${course.title} days`);
-        const lessons = document.createElement('div');
-        lessons.className = 'trainer-lessons';
-        (course.modules || []).forEach((module, index) => {
-          const dayNumber = module.order_index || index + 1;
-          const lessonPanel = document.createElement('div');
-          lessonPanel.className = 'trainer-lesson-panel';
-          lessonPanel.id = `trainer-course-${course.id}-day-${index + 1}`;
-          lessonPanel.setAttribute('role', 'tabpanel');
-          lessonPanel.hidden = index !== 0;
-
-          const dayTab = document.createElement('button');
-          dayTab.type = 'button';
-          dayTab.className = 'trainer-day-tab';
-          dayTab.id = `trainer-course-${course.id}-day-tab-${index + 1}`;
-          dayTab.setAttribute('role', 'tab');
-          dayTab.setAttribute('aria-controls', lessonPanel.id);
-          dayTab.setAttribute('aria-selected', String(index === 0));
-          dayTab.textContent = `Day ${dayNumber}`;
-          lessonPanel.setAttribute('aria-labelledby', dayTab.id);
-          dayTab.addEventListener('click', () => {
-            dayNavigation.querySelectorAll('[role="tab"]').forEach(tab => {
-              tab.setAttribute('aria-selected', String(tab === dayTab));
-            });
-            lessons.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-              panel.hidden = panel !== lessonPanel;
-            });
-          });
-          dayNavigation.appendChild(dayTab);
-
-          const lessonCard = document.createElement('article');
-          lessonCard.className = 'trainer-lesson-card';
-
-          const lessonHeading = document.createElement('div');
-          lessonHeading.className = 'trainer-lesson-heading';
-          const lessonTitle = document.createElement('h5');
-          lessonTitle.textContent = `Day ${dayNumber}`;
-          lessonHeading.appendChild(lessonTitle);
-          lessonCard.appendChild(lessonHeading);
-
-          if (module.assignment_prompt) {
-            const assignmentPrompt = document.createElement('p');
-            assignmentPrompt.className = 'trainer-lesson-prompt';
-            assignmentPrompt.textContent = module.assignment_prompt;
-            lessonCard.appendChild(assignmentPrompt);
-          }
-          const questions = module.questions || [];
-          const questionsSection = document.createElement('section');
-          questionsSection.className = 'trainer-lesson-questions';
-          const questionsHeading = document.createElement('h6');
-          questionsHeading.textContent = `Student questions (${questions.length})`;
-          questionsSection.appendChild(questionsHeading);
-          if (questions.length === 0) {
-            const noQuestions = document.createElement('p');
-            noQuestions.className = 'trainer-course-summary';
-            noQuestions.textContent = 'No questions for this day yet.';
-            questionsSection.appendChild(noQuestions);
-          } else {
-            questions.forEach(question => {
-              const questionCard = document.createElement('article');
-              questionCard.className = 'trainer-question-card';
-
-              const questionHeading = document.createElement('div');
-              questionHeading.className = 'trainer-question-heading';
-              const studentName = document.createElement('strong');
-              studentName.textContent = question.student_name;
-              questionHeading.appendChild(studentName);
-              questionCard.appendChild(questionHeading);
-
-              const questionText = document.createElement('p');
-              questionText.textContent = question.question;
-              questionCard.appendChild(questionText);
-
-              const replyInput = document.createElement('textarea');
-              replyInput.maxLength = 2000;
-              replyInput.required = true;
-              replyInput.value = question.trainer_reply || '';
-              replyInput.placeholder = 'Write a reply visible to students in this course';
-              replyInput.setAttribute('aria-label', `Reply to ${question.student_name}'s question`);
-              questionCard.appendChild(replyInput);
-
-              const replyButton = document.createElement('button');
-              replyButton.type = 'button';
-              replyButton.className = 'profile-link-btn';
-              replyButton.textContent = question.trainer_reply ? 'Update reply' : 'Post reply';
-              replyButton.addEventListener('click', () => replyToLessonQuestion(
-                question.id,
-                replyInput,
-                replyButton
-              ));
-              questionCard.appendChild(replyButton);
-              questionsSection.appendChild(questionCard);
-            });
-          }
-          lessonCard.appendChild(questionsSection);
-          lessonPanel.appendChild(lessonCard);
-          lessons.appendChild(lessonPanel);
-        });
-        courseWorkspace.append(dayNavigation, lessons);
-        section.appendChild(courseWorkspace);
-        courseContainer.appendChild(section);
-      });
-    }
+    renderStudentTable(
+      document.getElementById('trainer-student-progress'),
+      students,
+      true,
+      deletionStates
+    );
+    renderTrainerCourseNavigation(courses);
+    renderTrainerCourseContent();
 
     const pendingResponse = await fetch('/trainer/pending-assignments', { headers });
     const pending = await pendingResponse.json();
@@ -3999,6 +3916,192 @@
       throw new Error(pending.detail || 'Failed to load pending assignments.');
     }
     renderTrainerPendingAssignments(pending);
+  }
+
+  function renderTrainerCourseNavigation(courses) {
+    const courseList = document.getElementById('trainer-course-list');
+    const dayNavigation = document.getElementById('trainer-course-navigation');
+    const daysHeading = document.getElementById('trainer-course-days-heading');
+    courseList.replaceChildren();
+    dayNavigation.replaceChildren();
+    dayNavigation.removeAttribute('role');
+
+    if (courses.length === 0) {
+      courseList.textContent = 'No courses yet.';
+      daysHeading.textContent = 'Course days';
+      dayNavigation.textContent = 'Create a course to add days.';
+      return;
+    }
+
+    courses.forEach((course, index) => {
+      const courseButton = document.createElement('button');
+      courseButton.type = 'button';
+      courseButton.className = 'trainer-course-choice';
+      courseButton.id = `trainer-course-choice-${index}`;
+      courseButton.setAttribute('aria-current', String(course.id === activeTrainerCourseId));
+      courseButton.textContent = course.title;
+      courseButton.addEventListener('click', () => {
+        activeTrainerCourseId = course.id;
+        activeTrainerModuleId = null;
+        renderTrainerCourseNavigation(courses);
+        renderTrainerCourseContent();
+        document.getElementById(courseButton.id)?.focus();
+      });
+      courseList.appendChild(courseButton);
+    });
+
+    const activeCourse = courses.find(course => course.id === activeTrainerCourseId);
+    if (!activeCourse) return;
+    daysHeading.textContent = `${activeCourse.title} days`;
+    const modules = activeCourse.modules || [];
+    if (modules.length === 0) {
+      dayNavigation.textContent = 'No days in this course yet.';
+      return;
+    }
+    if (!modules.some(module => module.module_id === activeTrainerModuleId)) {
+      activeTrainerModuleId = modules[0].module_id;
+    }
+
+    dayNavigation.setAttribute('role', 'tablist');
+    modules.forEach((module, index) => {
+      const dayButton = document.createElement('button');
+      dayButton.type = 'button';
+      dayButton.className = 'trainer-day-tab';
+      dayButton.id = `trainer-day-tab-${index}`;
+      dayButton.setAttribute('role', 'tab');
+      dayButton.setAttribute('aria-controls', 'trainer-day-panel');
+      dayButton.setAttribute(
+        'aria-selected',
+        String(module.module_id === activeTrainerModuleId)
+      );
+      dayButton.dataset.moduleId = String(module.module_id);
+      dayButton.textContent = `Day ${module.order_index || index + 1}`;
+      dayButton.addEventListener('click', () => {
+        activeTrainerModuleId = module.module_id;
+        dayNavigation.querySelectorAll('[role="tab"]').forEach(tab => {
+          tab.setAttribute('aria-selected', String(tab === dayButton));
+        });
+        renderTrainerCourseContent();
+      });
+      dayNavigation.appendChild(dayButton);
+    });
+  }
+
+  function renderTrainerCourseContent() {
+    const courseContainer = document.getElementById('trainer-courses');
+    courseContainer.replaceChildren();
+    const course = (trainerDashboardData.courses || []).find(
+      item => item.id === activeTrainerCourseId
+    );
+    if (!course) {
+      const emptyState = document.createElement('section');
+      emptyState.className = 'trainer-course-card';
+      const heading = document.createElement('h3');
+      heading.textContent = 'Welcome to your trainer dashboard';
+      const message = document.createElement('p');
+      message.textContent = 'Create a course to organize its days, announcements, and student questions here.';
+      emptyState.append(heading, message);
+      courseContainer.appendChild(emptyState);
+      return;
+    }
+
+    const section = document.createElement('section');
+    section.className = 'trainer-course-card';
+    const heading = document.createElement('header');
+    heading.className = 'trainer-course-heading';
+    const title = document.createElement('h3');
+    title.textContent = course.title;
+    heading.appendChild(title);
+    const summary = document.createElement('p');
+    summary.className = 'trainer-course-summary';
+    summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} day(s)`;
+    heading.appendChild(summary);
+    if (course.description) {
+      const description = document.createElement('p');
+      description.className = 'trainer-course-summary';
+      description.textContent = course.description;
+      heading.appendChild(description);
+    }
+    section.appendChild(heading);
+    section.appendChild(createCourseAnnouncementForm(course));
+
+    const module = (course.modules || []).find(
+      item => item.module_id === activeTrainerModuleId
+    );
+    if (!module) {
+      const emptyDay = document.createElement('p');
+      emptyDay.className = 'trainer-course-summary';
+      emptyDay.textContent = 'No days have been added to this course yet.';
+      section.appendChild(emptyDay);
+      courseContainer.appendChild(section);
+      return;
+    }
+
+    const lessonCard = document.createElement('article');
+    lessonCard.className = 'trainer-lesson-card trainer-lessons';
+    lessonCard.id = 'trainer-day-panel';
+    lessonCard.setAttribute('role', 'tabpanel');
+    const activeDayTab = document.querySelector(
+      '#trainer-course-navigation [aria-selected="true"]'
+    );
+    if (activeDayTab) lessonCard.setAttribute('aria-labelledby', activeDayTab.id);
+    const lessonTitle = document.createElement('h4');
+    lessonTitle.textContent = `Day ${module.order_index}`;
+    lessonCard.appendChild(lessonTitle);
+    if (module.assignment_prompt) {
+      const assignmentPrompt = document.createElement('p');
+      assignmentPrompt.className = 'trainer-lesson-prompt';
+      assignmentPrompt.textContent = module.assignment_prompt;
+      lessonCard.appendChild(assignmentPrompt);
+    }
+
+    const questions = module.questions || [];
+    const questionsSection = document.createElement('section');
+    questionsSection.className = 'trainer-lesson-questions';
+    const questionsHeading = document.createElement('h5');
+    questionsHeading.textContent = `Student questions (${questions.length})`;
+    questionsSection.appendChild(questionsHeading);
+    if (questions.length === 0) {
+      const noQuestions = document.createElement('p');
+      noQuestions.className = 'trainer-course-summary';
+      noQuestions.textContent = 'No questions for this day yet.';
+      questionsSection.appendChild(noQuestions);
+    } else {
+      questions.forEach(question => {
+        const questionCard = document.createElement('article');
+        questionCard.className = 'trainer-question-card';
+        const studentName = document.createElement('strong');
+        studentName.textContent = question.student_name;
+        questionCard.appendChild(studentName);
+
+        const questionText = document.createElement('p');
+        questionText.textContent = question.question;
+        questionCard.appendChild(questionText);
+
+        const replyInput = document.createElement('textarea');
+        replyInput.maxLength = 2000;
+        replyInput.required = true;
+        replyInput.value = question.trainer_reply || '';
+        replyInput.placeholder = 'Write a reply visible to students in this course';
+        replyInput.setAttribute('aria-label', `Reply to ${question.student_name}'s question`);
+        questionCard.appendChild(replyInput);
+
+        const replyButton = document.createElement('button');
+        replyButton.type = 'button';
+        replyButton.className = 'profile-link-btn';
+        replyButton.textContent = question.trainer_reply ? 'Update reply' : 'Post reply';
+        replyButton.addEventListener('click', () => replyToLessonQuestion(
+          question.id,
+          replyInput,
+          replyButton
+        ));
+        questionCard.appendChild(replyButton);
+        questionsSection.appendChild(questionCard);
+      });
+    }
+    lessonCard.appendChild(questionsSection);
+    section.appendChild(lessonCard);
+    courseContainer.appendChild(section);
   }
 
   async function loadTrainerStudentAssignmentPanel() {
