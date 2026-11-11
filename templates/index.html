@@ -561,6 +561,44 @@
     .trainer-lessons {
       display: grid;
       gap: 1rem;
+      min-width: 0;
+    }
+    .trainer-course-workspace {
+      display: grid;
+      grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .trainer-day-navigation {
+      display: grid;
+      gap: 0.35rem;
+      max-height: 55vh;
+      overflow-y: auto;
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+    }
+    .trainer-day-tab {
+      width: 100%;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-muted);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .trainer-day-tab:hover {
+      background: var(--surface-hover);
+    }
+    .trainer-day-tab[aria-selected="true"] {
+      border-color: var(--primary);
+      background: var(--accent-soft);
+    }
+    .trainer-lesson-panel[hidden] {
+      display: none;
     }
     .trainer-lesson-card,
     .trainer-question-card {
@@ -818,6 +856,18 @@
     @media (max-width: 760px) {
       .trainer-layout {
         grid-template-columns: 1fr;
+      }
+      .trainer-course-workspace {
+        grid-template-columns: 1fr;
+      }
+      .trainer-day-navigation {
+        display: flex;
+        max-height: none;
+        overflow-x: auto;
+      }
+      .trainer-day-tab {
+        width: auto;
+        flex: 0 0 auto;
       }
       .trainer-actions {
         grid-row: 1;
@@ -1155,6 +1205,7 @@
         </button>
         <section id="trainer-pending-assignments" class="trainer-pending-section" aria-labelledby="trainer-pending-heading">
           <h4 id="trainer-pending-heading">Assignments awaiting evaluation</h4>
+          <p class="trainer-course-summary">Submitted student responses appear here for review.</p>
           <p id="trainer-pending-status" class="trainer-course-summary">Loading pending assignments...</p>
           <div id="trainer-pending-table-container"></div>
         </section>
@@ -3705,15 +3756,10 @@
     form.className = 'trainer-announcement-form';
     const heading = document.createElement('strong');
     heading.textContent = 'Share an announcement with enrolled students';
-    const titleInput = document.createElement('input');
-    titleInput.maxLength = 150;
-    titleInput.placeholder = 'Announcement title';
-    titleInput.setAttribute('aria-label', 'Announcement title');
-    titleInput.required = true;
     const messageInput = document.createElement('textarea');
     messageInput.maxLength = 4000;
-    messageInput.placeholder = 'Write an announcement';
-    messageInput.setAttribute('aria-label', 'Announcement message');
+    messageInput.placeholder = 'Write your announcement';
+    messageInput.setAttribute('aria-label', 'Announcement');
     messageInput.required = true;
     const status = document.createElement('p');
     status.setAttribute('aria-live', 'polite');
@@ -3722,17 +3768,16 @@
     submitButton.className = 'submit-btn';
     submitButton.style.width = 'fit-content';
     submitButton.textContent = 'Post announcement';
-    form.append(heading, titleInput, messageInput, submitButton, status);
+    form.append(heading, messageInput, submitButton, status);
     form.addEventListener('submit', event => {
       event.preventDefault();
-      publishCourseAnnouncement(course.id, titleInput, messageInput, submitButton, status);
+      publishCourseAnnouncement(course.id, messageInput, submitButton, status);
     });
     return form;
   }
 
   async function publishCourseAnnouncement(
     courseId,
-    titleInput,
     messageInput,
     submitButton,
     status,
@@ -3749,14 +3794,13 @@
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            title: titleInput.value.trim(),
+            title: 'Announcement',
             message: messageInput.value.trim(),
           }),
         }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Could not publish announcement.');
-      titleInput.value = '';
       messageInput.value = '';
       status.textContent = 'Announcement published for enrolled students.';
     } catch (error) {
@@ -3840,16 +3884,48 @@
         summary.textContent = `${course.total_enrolled} student(s) · ${(course.modules || []).length} day(s)`;
         section.appendChild(summary);
         section.appendChild(createCourseAnnouncementForm(course));
+        const courseWorkspace = document.createElement('div');
+        courseWorkspace.className = 'trainer-course-workspace';
+        const dayNavigation = document.createElement('nav');
+        dayNavigation.className = 'trainer-day-navigation';
+        dayNavigation.setAttribute('role', 'tablist');
+        dayNavigation.setAttribute('aria-label', `${course.title} days`);
         const lessons = document.createElement('div');
         lessons.className = 'trainer-lessons';
         (course.modules || []).forEach((module, index) => {
+          const dayNumber = module.order_index || index + 1;
+          const lessonPanel = document.createElement('div');
+          lessonPanel.className = 'trainer-lesson-panel';
+          lessonPanel.id = `trainer-course-${course.id}-day-${index + 1}`;
+          lessonPanel.setAttribute('role', 'tabpanel');
+          lessonPanel.hidden = index !== 0;
+
+          const dayTab = document.createElement('button');
+          dayTab.type = 'button';
+          dayTab.className = 'trainer-day-tab';
+          dayTab.id = `trainer-course-${course.id}-day-tab-${index + 1}`;
+          dayTab.setAttribute('role', 'tab');
+          dayTab.setAttribute('aria-controls', lessonPanel.id);
+          dayTab.setAttribute('aria-selected', String(index === 0));
+          dayTab.textContent = `Day ${dayNumber}`;
+          lessonPanel.setAttribute('aria-labelledby', dayTab.id);
+          dayTab.addEventListener('click', () => {
+            dayNavigation.querySelectorAll('[role="tab"]').forEach(tab => {
+              tab.setAttribute('aria-selected', String(tab === dayTab));
+            });
+            lessons.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+              panel.hidden = panel !== lessonPanel;
+            });
+          });
+          dayNavigation.appendChild(dayTab);
+
           const lessonCard = document.createElement('article');
           lessonCard.className = 'trainer-lesson-card';
 
           const lessonHeading = document.createElement('div');
           lessonHeading.className = 'trainer-lesson-heading';
           const lessonTitle = document.createElement('h5');
-          lessonTitle.textContent = `Day ${module.order_index || index + 1}`;
+          lessonTitle.textContent = `Day ${dayNumber}`;
           lessonHeading.appendChild(lessonTitle);
           lessonCard.appendChild(lessonHeading);
 
@@ -3908,9 +3984,11 @@
             });
           }
           lessonCard.appendChild(questionsSection);
-          lessons.appendChild(lessonCard);
+          lessonPanel.appendChild(lessonCard);
+          lessons.appendChild(lessonPanel);
         });
-        section.appendChild(lessons);
+        courseWorkspace.append(dayNavigation, lessons);
+        section.appendChild(courseWorkspace);
         courseContainer.appendChild(section);
       });
     }

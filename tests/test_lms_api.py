@@ -71,6 +71,9 @@ class TestLMSAPI(unittest.TestCase):
         self.assertIn('id="student-announcements-button"', response.text)
         self.assertIn('id="student-announcements-modal"', response.text)
         self.assertIn('function createCourseAnnouncementForm(course)', response.text)
+        self.assertNotIn("Announcement title", response.text)
+        self.assertIn("className = 'trainer-day-navigation'", response.text)
+        self.assertIn("Submitted student responses appear here for review.", response.text)
 
     def test_student_registration_and_login(self):
         email = "newstudent@example.com"
