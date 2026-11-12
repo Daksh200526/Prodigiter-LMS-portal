@@ -1895,7 +1895,18 @@
     }
   }
 
+  function getSessionAuthValue(key) {
+    const sessionValue = sessionStorage.getItem(key);
+    if (sessionValue !== null) return sessionValue;
+
+    const storedValue = localStorage.getItem(key);
+    if (storedValue !== null) sessionStorage.setItem(key, storedValue);
+    return storedValue;
+  }
+
   function handleLoginSuccess(token, role) {
+    sessionStorage.setItem('jwt_token', token);
+    sessionStorage.setItem('user_role', role);
     localStorage.setItem('jwt_token', token);
     localStorage.setItem('user_role', role);
 
@@ -1924,9 +1935,13 @@
   }
 
   function handleLogout() {
-    localStorage.removeItem('jwt_token');
-    localStorage.removeItem('user_role');
-    sessionStorage.clear();
+    const token = getSessionAuthValue('jwt_token');
+    if (localStorage.getItem('jwt_token') === token) {
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user_role');
+    }
+    sessionStorage.removeItem('jwt_token');
+    sessionStorage.removeItem('user_role');
     location.reload();
   }
 
@@ -1950,7 +1965,7 @@
   }
 
   async function openProfileModal() {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     document.getElementById('profile-modal').classList.remove('hidden');
     document.getElementById('profile-details-content').textContent = 'Loading profile...';
 
@@ -1978,7 +1993,7 @@
       const res = await fetch('/auth/request-recovery-phone-otp', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ phone_number: phone })
@@ -2010,7 +2025,7 @@
       const res = await fetch('/user/recovery-phone', {
         method: 'PUT',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ phone_number: phone, otp_code: otp })
@@ -2041,7 +2056,7 @@
     document.getElementById('student-pending-alert').classList.add('hidden');
     document.getElementById('student-no-courses').classList.add('hidden');
     document.getElementById('student-no-unlocked-lessons').classList.add('hidden');
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
 
     try {
       const res = await fetch('/student/dashboard', {
@@ -2098,7 +2113,7 @@
   async function loadStudentCourseCatalog() {
     const container = document.getElementById('student-course-catalog');
     const response = await fetch('/student/course-catalog', {
-      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+      headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') }
     });
     const data = await response.json();
     if (!response.ok) {
@@ -2169,7 +2184,7 @@
       const response = await fetch('/student/course-access-requests', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ course_id: courseId })
@@ -2190,7 +2205,7 @@
     try {
       const response = await fetch(
         `/student/enrollments/${encodeURIComponent(enrollmentId)}/announcements/unread-count`,
-        { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } }
+        { headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') } }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Could not check announcements.');
@@ -2223,7 +2238,7 @@
     try {
       const response = await fetch(
         `/student/enrollments/${encodeURIComponent(enrollmentId)}/announcements`,
-        { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') } }
+        { headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') } }
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Could not load announcements.');
@@ -2257,7 +2272,7 @@
             {
               method: 'POST',
               headers: {
-                'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+                'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({ announcement_ids: unreadIds }),
@@ -2330,7 +2345,7 @@
       const response = await fetch(
         `/student/enrollments/${encodeURIComponent(enrollmentId)}/trainer-chat`,
         {
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+          headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
         }
       );
       const data = await response.json();
@@ -2378,7 +2393,7 @@
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ message }),
@@ -2399,13 +2414,13 @@
   async function refreshTrainerChatNotifications() {
     if (
       trainerChatPollInProgress
-      || localStorage.getItem('user_role') !== 'trainer'
+      || getSessionAuthValue('user_role') !== 'trainer'
       || document.getElementById('trainer-view').classList.contains('hidden')
     ) return;
     trainerChatPollInProgress = true;
     try {
       const response = await fetch('/trainer/chat/unread-count', {
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Could not check student messages.');
@@ -2440,7 +2455,7 @@
     status.textContent = 'Loading student conversations...';
     try {
       const response = await fetch('/trainer/chat/conversations', {
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Could not load student conversations.');
@@ -2490,7 +2505,7 @@
       const response = await fetch(
         `/trainer/chat/${encodeURIComponent(selectedEnrollmentId)}`,
         {
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+          headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
         }
       );
       const data = await response.json();
@@ -2525,7 +2540,7 @@
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ message }),
@@ -3261,7 +3276,7 @@
       const response = await fetch('/student/daily-task', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -3300,7 +3315,7 @@
       const response = await fetch('/student/day-one/visit', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -3334,7 +3349,7 @@
       const response = await fetch('/student/day-one/answer', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -3400,7 +3415,7 @@
         `/student/enrollments/${encodeURIComponent(requestEnrollmentId)}/modules/${encodeURIComponent(requestModuleId)}/review-qr`,
         {
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           },
         }
       );
@@ -3446,7 +3461,7 @@
   async function refreshStudentLesson() {
     if (!activeEnrollmentId || !activeModuleId || studentLessonRefreshInProgress) return;
     studentLessonRefreshInProgress = true;
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     try {
       const response = await fetch('/student/dashboard', {
         headers: { 'Authorization': 'Bearer ' + token }
@@ -3513,7 +3528,7 @@
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ message: question }),
@@ -3532,7 +3547,7 @@
 
   async function autoMarkVideoCompleted(enrollmentId, moduleId) {
     if (!enrollmentId || !moduleId) return;
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
 
     try {
       const res = await fetch(`/student/complete-video/${encodeURIComponent(enrollmentId)}/${encodeURIComponent(moduleId)}`, {
@@ -3550,7 +3565,7 @@
 
   async function submitAssignment() {
     if (!activeEnrollmentId || !activeModuleId) return;
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const submissionInput = document.getElementById('assignment-submission-text');
     const submissionText = submissionInput.value.trim();
     if (!submissionText) {
@@ -3590,7 +3605,7 @@
   /* Admin Dashboard Render */
   async function renderAdminDashboard() {
     document.getElementById('admin-view').classList.remove('hidden');
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
 
     const res = await fetch('/admin/dashboard', {
       headers: { 'Authorization': 'Bearer ' + token }
@@ -3853,7 +3868,7 @@
         {
           method: 'PATCH',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ course_subject: majorSelect.value }),
@@ -3879,7 +3894,7 @@
       `/admin/students/${encodeURIComponent(student.student_id)}`,
       {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
       }
     );
     const data = await response.json();
@@ -4079,7 +4094,7 @@
       const response = await fetch('/admin/trainers', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -4113,7 +4128,7 @@
     const response = await fetch('/admin/process-deletion', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+        'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ request_id: requestId, approved }),
@@ -4127,7 +4142,7 @@
   }
 
   async function grantAccess(id) {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const res = await fetch('/admin/grant-access/' + encodeURIComponent(id), {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -4175,7 +4190,7 @@
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -4197,7 +4212,7 @@
 
   /* Trainer Dashboard Render & Course Assignment */
   async function renderTrainerDashboard() {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const headers = { 'Authorization': 'Bearer ' + token };
     
     await Promise.all([
@@ -4518,7 +4533,7 @@
         {
           method: 'PUT',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -4556,7 +4571,7 @@
   }
 
   async function loadTrainerStudentAssignmentPanel() {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const container = document.getElementById('trainer-assign-students-container');
 
     try {
@@ -4627,7 +4642,7 @@
     const container = document.getElementById('trainer-course-access-requests');
     try {
       const response = await fetch('/trainer/course-access-requests', {
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') }
+        headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') }
       });
       const data = await response.json();
       if (!response.ok) {
@@ -4703,7 +4718,7 @@
         {
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ approved })
@@ -4726,7 +4741,7 @@
     if (!selectEl) return;
     const courseId = selectEl.value;
 
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     try {
       const res = await fetch('/trainer/assign-course', {
         method: 'POST',
@@ -4847,7 +4862,7 @@
         `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
         {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+          headers: { 'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token') },
         }
       );
       const data = await response.json();
@@ -4865,7 +4880,7 @@
     if (!confirm('Admin approved this request. Permanently delete this student and their course progress?')) {
       return;
     }
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     try {
       const response = await fetch(
         `/trainer/delete-approved-student/${encodeURIComponent(studentId)}`,
@@ -4901,7 +4916,7 @@
       const response = await fetch('/trainer/request-student-deletion', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+          'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ student_id: studentId, reason: cleanReason }),
@@ -4921,7 +4936,7 @@
   }
 
   async function evaluateAssignment(progressId, isApproved, feedback) {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const response = await fetch('/trainer/evaluate-assignment', {
       method: 'POST',
       headers: {
@@ -5066,7 +5081,7 @@
       video_url: lesson.querySelector('.lesson-video-url').value.trim(),
       assignment_prompt: lesson.querySelector('.lesson-assignment-prompt').value.trim() || null,
     };
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     try {
       const response = await fetch(`/trainer/courses/${encodeURIComponent(course.id)}/modules`, {
         method: 'POST',
@@ -5091,7 +5106,7 @@
   }
 
   async function createTrainerCourse() {
-    const token = localStorage.getItem('jwt_token');
+    const token = getSessionAuthValue('jwt_token');
     const lessons = Array.from(document.querySelectorAll('#trainer-course-lessons .trainer-lesson'));
     const payload = {
       title: document.getElementById('trainer-course-title').value.trim(),
