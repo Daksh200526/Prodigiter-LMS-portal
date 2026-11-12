@@ -49,6 +49,9 @@ from otp_security import (
 
 models.Base.metadata.create_all(bind=engine)
 
+# Keep this enabled only while trainers and students test every course day.
+DAYS_UNLOCKED_FOR_TESTING = True
+
 if "assignment_completed" not in {
     column["name"] for column in inspect(engine).get_columns("progress")
 }:
@@ -254,6 +257,39 @@ def _lesson_question_payload(question: models.LessonQuestion) -> dict:
         "created_at": question.created_at.isoformat() if question.created_at else None,
         "replied_at": question.replied_at.isoformat() if question.replied_at else None,
     }
+
+
+def _trainer_chat_message_payload(
+    message: models.TrainerStudentChatMessage,
+    student_id: str,
+) -> dict:
+    is_student_message = message.sender_id == student_id
+    return {
+        "id": message.id,
+        "message": message.message,
+        "sender_role": "student" if is_student_message else "trainer",
+        "sender_name": message.sender.name if message.sender else (
+            "Student" if is_student_message else "Trainer"
+        ),
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
+
+
+def _trainer_chat_enrollment(
+    db: Session,
+    enrollment_id: str,
+    trainer_id: str,
+) -> models.Enrollment:
+    enrollment = db.query(models.Enrollment).options(
+        joinedload(models.Enrollment.student),
+        joinedload(models.Enrollment.course),
+    ).join(models.Course).filter(
+        models.Enrollment.id == enrollment_id,
+        models.Course.trainer_id == trainer_id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Student conversation not found.")
+    return enrollment
 
 
 class StudentRegister(BaseModel):
@@ -1130,6 +1166,8 @@ def _module_unlock_status(
     now: datetime.datetime,
     progress_by_module: dict[str, models.StudentProgress] | None = None,
 ) -> tuple[bool, str]:
+    if DAYS_UNLOCKED_FOR_TESTING:
+        return True, ""
     if module_index == 0:
         return True, ""
 
@@ -1270,6 +1308,199 @@ def reply_to_lesson_question(
     db.commit()
     db.refresh(question)
     return _lesson_question_payload(question)
+
+
+@app.get("/student/enrollments/{enrollment_id}/trainer-chat")
+def student_trainer_chat(
+    enrollment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    enrollment = db.query(models.Enrollment).options(
+        joinedload(models.Enrollment.course).joinedload(models.Course.trainer),
+    ).filter_by(
+        id=enrollment_id,
+        student_id=current_user.id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found.")
+
+    messages = db.query(models.TrainerStudentChatMessage).options(
+        joinedload(models.TrainerStudentChatMessage.sender),
+    ).filter_by(enrollment_id=enrollment.id).order_by(
+        models.TrainerStudentChatMessage.created_at,
+        models.TrainerStudentChatMessage.id,
+    ).all()
+    now = datetime.datetime.now(timezone.utc)
+    for message in messages:
+        if message.sender_id != current_user.id and not message.student_read_at:
+            message.student_read_at = now
+    db.commit()
+    return {
+        "trainer_name": enrollment.course.trainer.name if enrollment.course.trainer else "Trainer",
+        "messages": [
+            _trainer_chat_message_payload(message, current_user.id)
+            for message in messages
+        ],
+    }
+
+
+@app.post("/student/enrollments/{enrollment_id}/trainer-chat", status_code=201)
+def student_send_trainer_chat_message(
+    enrollment_id: str,
+    payload: schemas.TrainerStudentChatCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("student")),
+):
+    enrollment = db.query(models.Enrollment).filter_by(
+        id=enrollment_id,
+        student_id=current_user.id,
+    ).first()
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found.")
+    message_text = payload.message.strip()
+    if not message_text:
+        raise HTTPException(status_code=422, detail="Message cannot be empty.")
+
+    message = models.TrainerStudentChatMessage(
+        id=str(uuid.uuid4()),
+        enrollment_id=enrollment.id,
+        sender_id=current_user.id,
+        message=message_text,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return _trainer_chat_message_payload(message, current_user.id)
+
+
+@app.get("/trainer/chat/unread-count")
+def trainer_chat_unread_count(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    unread_count = db.query(func.count(
+        models.TrainerStudentChatMessage.id
+    )).join(
+        models.Enrollment,
+        models.Enrollment.id == models.TrainerStudentChatMessage.enrollment_id,
+    ).join(
+        models.Course,
+        models.Course.id == models.Enrollment.course_id,
+    ).filter(
+        models.Course.trainer_id == current_user.id,
+        models.TrainerStudentChatMessage.sender_id == models.Enrollment.student_id,
+        models.TrainerStudentChatMessage.trainer_read_at.is_(None),
+    ).scalar()
+    return {"unread_count": unread_count or 0}
+
+
+@app.get("/trainer/chat/conversations")
+def trainer_chat_conversations(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    enrollments = db.query(models.Enrollment).options(
+        joinedload(models.Enrollment.student),
+        joinedload(models.Enrollment.course),
+    ).join(
+        models.Course,
+        models.Course.id == models.Enrollment.course_id,
+    ).join(
+        models.TrainerStudentChatMessage,
+        models.TrainerStudentChatMessage.enrollment_id == models.Enrollment.id,
+    ).filter(
+        models.Course.trainer_id == current_user.id,
+    ).distinct().all()
+    if not enrollments:
+        return {"conversations": []}
+
+    enrollment_ids = [enrollment.id for enrollment in enrollments]
+    messages = db.query(models.TrainerStudentChatMessage).filter(
+        models.TrainerStudentChatMessage.enrollment_id.in_(enrollment_ids),
+    ).order_by(
+        models.TrainerStudentChatMessage.created_at,
+        models.TrainerStudentChatMessage.id,
+    ).all()
+    messages_by_enrollment: dict[str, list[models.TrainerStudentChatMessage]] = {}
+    for message in messages:
+        messages_by_enrollment.setdefault(message.enrollment_id, []).append(message)
+
+    conversations = []
+    for enrollment in enrollments:
+        conversation_messages = messages_by_enrollment[enrollment.id]
+        latest = conversation_messages[-1]
+        unread_count = sum(
+            message.sender_id == enrollment.student_id and not message.trainer_read_at
+            for message in conversation_messages
+        )
+        conversations.append({
+            "enrollment_id": enrollment.id,
+            "student_id": enrollment.student_id,
+            "student_name": enrollment.student.name if enrollment.student else "Student",
+            "student_email": enrollment.student.email if enrollment.student else "",
+            "course_title": enrollment.course.title,
+            "unread_count": unread_count,
+            "last_message": latest.message,
+            "last_message_at": latest.created_at.isoformat() if latest.created_at else None,
+        })
+    conversations.sort(
+        key=lambda item: item["last_message_at"] or "",
+        reverse=True,
+    )
+    return {"conversations": conversations}
+
+
+@app.get("/trainer/chat/{enrollment_id}")
+def trainer_get_chat(
+    enrollment_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    enrollment = _trainer_chat_enrollment(db, enrollment_id, current_user.id)
+    messages = db.query(models.TrainerStudentChatMessage).options(
+        joinedload(models.TrainerStudentChatMessage.sender),
+    ).filter_by(enrollment_id=enrollment.id).order_by(
+        models.TrainerStudentChatMessage.created_at,
+        models.TrainerStudentChatMessage.id,
+    ).all()
+    now = datetime.datetime.now(timezone.utc)
+    for message in messages:
+        if message.sender_id == enrollment.student_id and not message.trainer_read_at:
+            message.trainer_read_at = now
+    db.commit()
+    return {
+        "student_name": enrollment.student.name if enrollment.student else "Student",
+        "course_title": enrollment.course.title,
+        "messages": [
+            _trainer_chat_message_payload(message, enrollment.student_id)
+            for message in messages
+        ],
+    }
+
+
+@app.post("/trainer/chat/{enrollment_id}", status_code=201)
+def trainer_send_chat_message(
+    enrollment_id: str,
+    payload: schemas.TrainerStudentChatCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role("trainer")),
+):
+    enrollment = _trainer_chat_enrollment(db, enrollment_id, current_user.id)
+    message_text = payload.message.strip()
+    if not message_text:
+        raise HTTPException(status_code=422, detail="Message cannot be empty.")
+
+    message = models.TrainerStudentChatMessage(
+        id=str(uuid.uuid4()),
+        enrollment_id=enrollment.id,
+        sender_id=current_user.id,
+        message=message_text,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return _trainer_chat_message_payload(message, enrollment.student_id)
 
 
 def _student_announcement_enrollment(

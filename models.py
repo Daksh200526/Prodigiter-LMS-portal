@@ -116,6 +116,12 @@ class Enrollment(Base):
         back_populates="enrollment",
         cascade="all, delete-orphan",
     )
+    chat_messages = relationship(
+        "TrainerStudentChatMessage",
+        back_populates="enrollment",
+        cascade="all, delete-orphan",
+        order_by="TrainerStudentChatMessage.created_at",
+    )
 
 
 class CourseAccessRequest(Base):
@@ -163,6 +169,31 @@ class StudentAssignmentInstruction(Base):
 
     enrollment = relationship("Enrollment", back_populates="assignment_instructions")
     module = relationship("Module", back_populates="student_assignment_instructions")
+
+
+class TrainerStudentChatMessage(Base):
+    __tablename__ = "trainer_student_chat_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    enrollment_id = Column(
+        String(36),
+        ForeignKey("enrollments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    trainer_read_at = Column(DateTime, nullable=True)
+    student_read_at = Column(DateTime, nullable=True)
+
+    enrollment = relationship("Enrollment", back_populates="chat_messages")
+    sender = relationship("User")
 
 
 class Announcement(Base):

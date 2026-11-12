@@ -435,6 +435,50 @@
       color: var(--text-muted);
       font-size: 0.8rem;
     }
+    .chat-messages {
+      display: grid;
+      gap: 0.65rem;
+      max-height: 45vh;
+      overflow-y: auto;
+      margin: 1rem 0;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+    .chat-message {
+      max-width: 85%;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .chat-message-sent {
+      justify-self: end;
+      border-color: var(--link-border);
+      background: var(--link-background);
+    }
+    .chat-message small {
+      display: block;
+      margin-top: 0.3rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+    .chat-compose {
+      display: grid;
+      gap: 0.5rem;
+    }
+    .chat-compose textarea {
+      min-height: 4rem;
+      resize: vertical;
+    }
+    .trainer-chat-notice {
+      margin: 0.5rem 0;
+      color: var(--badge-danger-text);
+      font-weight: 650;
+    }
     .trainer-announcement-form {
       display: grid;
       gap: 0.5rem;
@@ -1122,6 +1166,10 @@
         <span>Announcements</span>
         <span id="student-announcements-count" class="announcement-badge hidden" aria-label="Unread announcements">0</span>
       </button>
+      <button id="student-trainer-chat-button" class="announcement-button" type="button"
+        onclick="openStudentTrainerChat()" aria-haspopup="dialog">
+        <span>Chat with your trainer</span>
+      </button>
     </div>
 
     <!-- Main Workspace -->
@@ -1234,6 +1282,12 @@
         <summary>Assign courses to students</summary>
         <div id="trainer-assign-students-container">Loading students...</div>
       </details>
+      <button id="trainer-chat-inbox-button" type="button"
+        class="profile-link-btn trainer-view-assignments-btn"
+        onclick="openTrainerChatInbox()" aria-haspopup="dialog">
+        Student messages <span id="trainer-chat-unread-count" class="announcement-badge hidden">0</span>
+      </button>
+      <span id="trainer-chat-alert" class="trainer-chat-notice" aria-live="polite"></span>
       <button type="button" class="profile-link-btn trainer-view-assignments-btn"
         onclick="openTrainerAssignments()">View assignments</button>
       <div class="sidebar-header">Your courses</div>
@@ -1267,6 +1321,23 @@
       onclick="closeStudentAnnouncements()">&times;</button>
     <h3 id="student-announcements-title" style="margin-top: 0;">Announcements</h3>
     <div id="student-announcements-list" class="announcement-list" aria-live="polite"></div>
+  </section>
+</div>
+
+<div id="student-trainer-chat-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true"
+  aria-labelledby="student-trainer-chat-title">
+  <section class="modal-box announcement-dialog">
+    <button type="button" class="modal-close-btn" aria-label="Close trainer chat"
+      onclick="closeTrainerChat('student-trainer-chat-modal')">&times;</button>
+    <h3 id="student-trainer-chat-title">Private chat with your trainer</h3>
+    <p id="student-trainer-chat-course" class="trainer-course-summary"></p>
+    <div id="student-trainer-chat-messages" class="chat-messages" aria-live="polite"></div>
+    <form class="chat-compose" onsubmit="event.preventDefault(); sendStudentTrainerChatMessage();">
+      <label for="student-trainer-chat-input">Your message</label>
+      <textarea id="student-trainer-chat-input" maxlength="2000" required></textarea>
+      <button id="student-trainer-chat-send" type="submit" class="submit-btn">Send message</button>
+    </form>
+    <p id="student-trainer-chat-status" aria-live="polite"></p>
   </section>
 </div>
 
@@ -1373,6 +1444,26 @@
   </section>
 </div>
 
+<div id="trainer-chat-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true"
+  aria-labelledby="trainer-chat-title">
+  <section class="modal-box trainer-modal-box">
+    <button type="button" class="modal-close-btn" aria-label="Close student messages"
+      onclick="closeTrainerChat('trainer-chat-modal')">&times;</button>
+    <h3 id="trainer-chat-title">Private student conversations</h3>
+    <label for="trainer-chat-conversation">Student conversation</label>
+    <select id="trainer-chat-conversation" onchange="loadTrainerChatThread()"></select>
+    <p id="trainer-chat-context" class="trainer-course-summary"></p>
+    <div id="trainer-chat-notification" class="trainer-chat-notice" aria-live="polite"></div>
+    <div id="trainer-chat-messages" class="chat-messages" aria-live="polite"></div>
+    <form class="chat-compose" onsubmit="event.preventDefault(); sendTrainerChatMessage();">
+      <label for="trainer-chat-input">Reply to this student</label>
+      <textarea id="trainer-chat-input" maxlength="2000" required></textarea>
+      <button id="trainer-chat-send" type="submit" class="submit-btn">Send reply</button>
+    </form>
+    <p id="trainer-chat-status" aria-live="polite"></p>
+  </section>
+</div>
+
 <script>
   let activeStudentData = null;
   let activeEnrollmentId = null;
@@ -1382,6 +1473,9 @@
   let trainerDashboardData = { courses: [] };
   let activeTrainerCourseId = null;
   let activeTrainerModuleId = null;
+  let activeTrainerChatEnrollmentId = null;
+  let trainerChatUnreadCount = 0;
+  let trainerChatPollInProgress = false;
   let studentLessonRefreshInProgress = false;
   let activeDayOneSiteIndex = 0;
   let activeDayOneQuestionIndex = 0;
@@ -1856,6 +1950,7 @@
     } else {
       document.getElementById('trainer-view').classList.remove('hidden');
       renderTrainerDashboard();
+      refreshTrainerChatNotifications();
     }
   }
 
@@ -2224,11 +2319,279 @@
     document.getElementById('student-announcements-modal').classList.add('hidden');
   }
 
+  function closeTrainerChat(modalId) {
+    document.getElementById(modalId).classList.add('hidden');
+  }
+
+  function renderPrivateChatMessages(container, messages, currentUserRole) {
+    container.replaceChildren();
+    if (!messages.length) {
+      const emptyState = document.createElement('p');
+      emptyState.textContent = 'No messages yet. Send a message to start this private conversation.';
+      container.appendChild(emptyState);
+      return;
+    }
+
+    messages.forEach(message => {
+      const item = document.createElement('div');
+      item.className = 'chat-message'
+        + (message.sender_role === currentUserRole ? ' chat-message-sent' : '');
+      item.textContent = message.message;
+      const metadata = document.createElement('small');
+      const sentAt = message.created_at
+        ? new Date(message.created_at).toLocaleString()
+        : '';
+      metadata.textContent = sentAt
+        ? `${message.sender_name} · ${sentAt}`
+        : message.sender_name;
+      item.appendChild(metadata);
+      container.appendChild(item);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  let studentChatPollInProgress = false;
+  async function loadStudentTrainerChat() {
+    const enrollmentId = activeEnrollmentId;
+    if (!enrollmentId || studentChatPollInProgress) return;
+    studentChatPollInProgress = true;
+    const messages = document.getElementById('student-trainer-chat-messages');
+    const status = document.getElementById('student-trainer-chat-status');
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(enrollmentId)}/trainer-chat`,
+        {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load your trainer chat.');
+      if (activeEnrollmentId !== enrollmentId) return;
+      document.getElementById('student-trainer-chat-title').textContent =
+        `Private chat with ${data.trainer_name}`;
+      document.getElementById('student-trainer-chat-course').textContent =
+        activeStudentData ? activeStudentData.course_title : '';
+      renderPrivateChatMessages(messages, data.messages || [], 'student');
+      status.textContent = '';
+    } catch (error) {
+      status.textContent = error.message || 'Could not load your trainer chat.';
+    } finally {
+      studentChatPollInProgress = false;
+    }
+  }
+
+  async function openStudentTrainerChat() {
+    const modal = document.getElementById('student-trainer-chat-modal');
+    modal.classList.remove('hidden');
+    if (!activeEnrollmentId) {
+      document.getElementById('student-trainer-chat-status').textContent =
+        'Enroll in a course before starting a conversation with your trainer.';
+      document.getElementById('student-trainer-chat-send').disabled = true;
+      return;
+    }
+    document.getElementById('student-trainer-chat-send').disabled = false;
+    await loadStudentTrainerChat();
+    document.getElementById('student-trainer-chat-input').focus();
+  }
+
+  async function sendStudentTrainerChatMessage() {
+    const enrollmentId = activeEnrollmentId;
+    const input = document.getElementById('student-trainer-chat-input');
+    const button = document.getElementById('student-trainer-chat-send');
+    const status = document.getElementById('student-trainer-chat-status');
+    const message = input.value.trim();
+    if (!enrollmentId || !message) return;
+    button.disabled = true;
+    status.textContent = 'Sending message...';
+    try {
+      const response = await fetch(
+        `/student/enrollments/${encodeURIComponent(enrollmentId)}/trainer-chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not send your message.');
+      input.value = '';
+      status.textContent = '';
+      await loadStudentTrainerChat();
+    } catch (error) {
+      status.textContent = error.message || 'Could not send your message.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function refreshTrainerChatNotifications() {
+    if (
+      trainerChatPollInProgress
+      || localStorage.getItem('user_role') !== 'trainer'
+      || document.getElementById('trainer-view').classList.contains('hidden')
+    ) return;
+    trainerChatPollInProgress = true;
+    try {
+      const response = await fetch('/trainer/chat/unread-count', {
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not check student messages.');
+      const unreadCount = Number(data.unread_count) || 0;
+      if (
+        unreadCount > trainerChatUnreadCount
+        && 'Notification' in window
+        && Notification.permission === 'granted'
+      ) {
+        new Notification('New student message', {
+          body: 'A student sent you a private chat message.',
+        });
+      }
+      const badge = document.getElementById('trainer-chat-unread-count');
+      badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+      badge.classList.toggle('hidden', unreadCount === 0);
+      document.getElementById('trainer-chat-alert').textContent = unreadCount
+        ? `You have ${unreadCount} unread student message${unreadCount === 1 ? '' : 's'}.`
+        : '';
+      trainerChatUnreadCount = unreadCount;
+    } catch (error) {
+      console.error('Could not refresh trainer chat notifications:', error);
+    } finally {
+      trainerChatPollInProgress = false;
+    }
+  }
+
+  async function openTrainerChatInbox() {
+    document.getElementById('trainer-chat-modal').classList.remove('hidden');
+    const select = document.getElementById('trainer-chat-conversation');
+    const status = document.getElementById('trainer-chat-status');
+    status.textContent = 'Loading student conversations...';
+    try {
+      const response = await fetch('/trainer/chat/conversations', {
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load student conversations.');
+      const previousEnrollmentId = select.value || activeTrainerChatEnrollmentId;
+      select.replaceChildren();
+      (data.conversations || []).forEach(conversation => {
+        const option = document.createElement('option');
+        option.value = conversation.enrollment_id;
+        option.textContent = `${conversation.student_name} · ${conversation.course_title}`
+          + (conversation.unread_count ? ` (${conversation.unread_count} new)` : '');
+        select.appendChild(option);
+      });
+      if (!data.conversations || data.conversations.length === 0) {
+        status.textContent = 'No student conversations yet.';
+        document.getElementById('trainer-chat-context').textContent = '';
+        renderPrivateChatMessages(
+          document.getElementById('trainer-chat-messages'),
+          [],
+          'trainer'
+        );
+        document.getElementById('trainer-chat-input').disabled = true;
+        document.getElementById('trainer-chat-send').disabled = true;
+        return;
+      }
+      if ((data.conversations || []).some(
+        conversation => conversation.enrollment_id === previousEnrollmentId
+      )) {
+        select.value = previousEnrollmentId;
+      }
+      document.getElementById('trainer-chat-input').disabled = false;
+      document.getElementById('trainer-chat-send').disabled = false;
+      status.textContent = '';
+      await loadTrainerChatThread(select.value);
+      await refreshTrainerChatNotifications();
+    } catch (error) {
+      status.textContent = error.message || 'Could not load student conversations.';
+    }
+  }
+
+  async function loadTrainerChatThread(enrollmentId) {
+    const select = document.getElementById('trainer-chat-conversation');
+    const selectedEnrollmentId = enrollmentId || select.value;
+    if (!selectedEnrollmentId) return;
+    activeTrainerChatEnrollmentId = selectedEnrollmentId;
+    const status = document.getElementById('trainer-chat-status');
+    try {
+      const response = await fetch(
+        `/trainer/chat/${encodeURIComponent(selectedEnrollmentId)}`,
+        {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token') },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load this conversation.');
+      if (activeTrainerChatEnrollmentId !== selectedEnrollmentId) return;
+      document.getElementById('trainer-chat-context').textContent =
+        `${data.student_name} · ${data.course_title}`;
+      renderPrivateChatMessages(
+        document.getElementById('trainer-chat-messages'),
+        data.messages || [],
+        'trainer'
+      );
+      status.textContent = '';
+      await refreshTrainerChatNotifications();
+    } catch (error) {
+      status.textContent = error.message || 'Could not load this conversation.';
+    }
+  }
+
+  async function sendTrainerChatMessage() {
+    const enrollmentId = document.getElementById('trainer-chat-conversation').value;
+    const input = document.getElementById('trainer-chat-input');
+    const button = document.getElementById('trainer-chat-send');
+    const status = document.getElementById('trainer-chat-status');
+    const message = input.value.trim();
+    if (!enrollmentId || !message) return;
+    button.disabled = true;
+    status.textContent = 'Sending reply...';
+    try {
+      const response = await fetch(
+        `/trainer/chat/${encodeURIComponent(enrollmentId)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not send your reply.');
+      input.value = '';
+      status.textContent = '';
+      await loadTrainerChatThread(enrollmentId);
+      await openTrainerChatInbox();
+    } catch (error) {
+      status.textContent = error.message || 'Could not send your reply.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   document.getElementById('student-announcements-modal').addEventListener('click', event => {
     if (event.target === event.currentTarget) closeStudentAnnouncements();
   });
+  document.getElementById('student-trainer-chat-modal').addEventListener('click', event => {
+    if (event.target === event.currentTarget) {
+      closeTrainerChat('student-trainer-chat-modal');
+    }
+  });
+  document.getElementById('trainer-chat-modal').addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeTrainerChat('trainer-chat-modal');
+  });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeStudentAnnouncements();
+    if (event.key === 'Escape') {
+      closeTrainerChat('student-trainer-chat-modal');
+      closeTrainerChat('trainer-chat-modal');
+    }
   });
   window.setInterval(() => {
     if (
@@ -2238,6 +2601,20 @@
       refreshStudentAnnouncementCount(activeEnrollmentId);
     }
   }, 60000);
+  window.setInterval(() => {
+    if (
+      !document.getElementById('student-trainer-chat-modal').classList.contains('hidden')
+    ) {
+      loadStudentTrainerChat();
+    }
+    if (
+      !document.getElementById('trainer-chat-modal').classList.contains('hidden')
+      && document.getElementById('trainer-chat-conversation').value
+    ) {
+      loadTrainerChatThread();
+    }
+    refreshTrainerChatNotifications();
+  }, 15000);
 
   function renderStudentCourse(activeCourse) {
     activeEnrollmentId = activeCourse.enrollment_id;
@@ -2603,21 +2980,18 @@
     panel.appendChild(questionTabs);
 
     const currentQuestion = day.questions[activeDayOneQuestionIndex];
-    const questionHeading = document.createElement('div');
-    questionHeading.className = 'day-one-question-heading';
     const questionLabel = document.createElement('h4');
     questionLabel.textContent =
       `Check ${activeDayOneQuestionIndex + 1} of ${day.questions.length}: ${currentQuestion.label}`;
-    questionHeading.appendChild(questionLabel);
+    panel.appendChild(questionLabel);
     const questionLink = document.createElement('a');
     questionLink.className = 'day-one-site-link';
     questionLink.href = new URL(currentQuestion.path, site.url).href;
     questionLink.target = '_blank';
     questionLink.rel = 'noopener noreferrer';
-    questionLink.textContent = 'Click here';
+    questionLink.textContent = 'Click here to open';
     questionLink.setAttribute('aria-label', `Open page for: ${currentQuestion.label}`);
-    questionHeading.appendChild(questionLink);
-    panel.appendChild(questionHeading);
+    panel.appendChild(questionLink);
 
     if (firstUnansweredQuestion < 0) {
       const completeMessage = document.createElement('p');

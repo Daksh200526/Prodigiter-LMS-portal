@@ -208,6 +208,9 @@ class TestLMSAPI(unittest.TestCase):
             db.close()
 
     def test_day_one_checks_unlock_sequentially_and_start_day_two_cooldown(self):
+        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
+        unlock_patch.start()
+        self.addCleanup(unlock_patch.stop)
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
@@ -381,6 +384,9 @@ class TestLMSAPI(unittest.TestCase):
             db.close()
 
     def test_daily_tasks_are_sequential_and_unlock_the_review_qr(self):
+        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
+        unlock_patch.start()
+        self.addCleanup(unlock_patch.stop)
         db = self.testing_session_local()
         trainer_id = str(uuid.uuid4())
         student_id = str(uuid.uuid4())
@@ -596,6 +602,9 @@ class TestLMSAPI(unittest.TestCase):
             db.close()
 
     def test_assignment_completion_starts_24_hour_unlock_timer(self):
+        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
+        unlock_patch.start()
+        self.addCleanup(unlock_patch.stop)
         db = self.testing_session_local()
         try:
             trainer_id = str(uuid.uuid4())
@@ -1534,6 +1543,9 @@ class TestLMSAPI(unittest.TestCase):
             db.close()
 
     def test_student_cannot_bypass_day_one_or_complete_a_locked_day(self):
+        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
+        unlock_patch.start()
+        self.addCleanup(unlock_patch.stop)
         db = self.testing_session_local()
         try:
             trainer_id = str(uuid.uuid4())
@@ -2514,8 +2526,8 @@ class TestLMSAPI(unittest.TestCase):
                 headers=admin_headers,
             ))
 
-            self.assertLessEqual(student_queries, 4)
-            self.assertLessEqual(trainer_queries, 6)
+            self.assertLessEqual(student_queries, 5)
+            self.assertLessEqual(trainer_queries, 7)
             self.assertLessEqual(admin_queries, 6)
         finally:
             db.close()
@@ -2722,6 +2734,230 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(
                 updated_student_dashboard.json()["courses"][0]["modules"][0]["questions"][0]["trainer_reply"],
                 "The example uses a callback to handle the result.",
+            )
+        finally:
+            db.close()
+
+    def test_private_trainer_chat_is_scoped_to_each_student_and_notifies_trainer(self):
+        db = self.testing_session_local()
+        try:
+            trainer_id = str(uuid.uuid4())
+            other_trainer_id = str(uuid.uuid4())
+            first_student_id = str(uuid.uuid4())
+            second_student_id = str(uuid.uuid4())
+            course_id = str(uuid.uuid4())
+            first_enrollment_id = str(uuid.uuid4())
+            second_enrollment_id = str(uuid.uuid4())
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Chat Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            other_trainer = main.models.User(
+                id=other_trainer_id,
+                name="Other Trainer",
+                email=f"{other_trainer_id}@example.com",
+                role="trainer",
+            )
+            first_student = main.models.User(
+                id=first_student_id,
+                name="First Student",
+                email=f"{first_student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            second_student = main.models.User(
+                id=second_student_id,
+                name="Second Student",
+                email=f"{second_student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            course = main.models.Course(
+                id=course_id,
+                title="Private Chat Course",
+                trainer_id=trainer_id,
+            )
+            db.add_all([
+                trainer,
+                other_trainer,
+                first_student,
+                second_student,
+                course,
+                main.models.Enrollment(
+                    id=first_enrollment_id,
+                    student_id=first_student_id,
+                    course_id=course_id,
+                ),
+                main.models.Enrollment(
+                    id=second_enrollment_id,
+                    student_id=second_student_id,
+                    course_id=course_id,
+                ),
+            ])
+            db.commit()
+
+            def headers(user_id, role):
+                token = auth.create_access_token({"sub": user_id, "role": role})
+                return {"Authorization": f"Bearer {token}"}
+
+            first_headers = headers(first_student_id, "student")
+            second_headers = headers(second_student_id, "student")
+            trainer_headers = headers(trainer_id, "trainer")
+            other_trainer_headers = headers(other_trainer_id, "trainer")
+
+            first_message = self.client.post(
+                f"/student/enrollments/{first_enrollment_id}/trainer-chat",
+                json={"message": "I need help with my assignment."},
+                headers=first_headers,
+            )
+            second_message = self.client.post(
+                f"/student/enrollments/{second_enrollment_id}/trainer-chat",
+                json={"message": "I have a different question."},
+                headers=second_headers,
+            )
+            self.assertEqual(first_message.status_code, 201, first_message.text)
+            self.assertEqual(second_message.status_code, 201, second_message.text)
+
+            first_chat = self.client.get(
+                f"/student/enrollments/{first_enrollment_id}/trainer-chat",
+                headers=first_headers,
+            )
+            self.assertEqual(first_chat.status_code, 200, first_chat.text)
+            self.assertEqual(len(first_chat.json()["messages"]), 1)
+            self.assertEqual(
+                first_chat.json()["messages"][0]["message"],
+                "I need help with my assignment.",
+            )
+
+            unread = self.client.get(
+                "/trainer/chat/unread-count",
+                headers=trainer_headers,
+            )
+            conversations = self.client.get(
+                "/trainer/chat/conversations",
+                headers=trainer_headers,
+            )
+            self.assertEqual(unread.json()["unread_count"], 2)
+            self.assertEqual(
+                {item["enrollment_id"] for item in conversations.json()["conversations"]},
+                {first_enrollment_id, second_enrollment_id},
+            )
+
+            thread = self.client.get(
+                f"/trainer/chat/{first_enrollment_id}",
+                headers=trainer_headers,
+            )
+            self.assertEqual(thread.status_code, 200, thread.text)
+            self.assertEqual(len(thread.json()["messages"]), 1)
+            self.assertEqual(
+                self.client.get(
+                    "/trainer/chat/unread-count",
+                    headers=trainer_headers,
+                ).json()["unread_count"],
+                1,
+            )
+            trainer_reply = self.client.post(
+                f"/trainer/chat/{first_enrollment_id}",
+                json={"message": "I can help you with that."},
+                headers=trainer_headers,
+            )
+            self.assertEqual(trainer_reply.status_code, 201, trainer_reply.text)
+            refreshed_first_chat = self.client.get(
+                f"/student/enrollments/{first_enrollment_id}/trainer-chat",
+                headers=first_headers,
+            )
+            self.assertEqual(len(refreshed_first_chat.json()["messages"]), 2)
+            self.assertEqual(
+                refreshed_first_chat.json()["messages"][1]["message"],
+                "I can help you with that.",
+            )
+
+            self.assertEqual(
+                self.client.get(
+                    f"/trainer/chat/{first_enrollment_id}",
+                    headers=other_trainer_headers,
+                ).status_code,
+                404,
+            )
+            self.assertEqual(
+                self.client.post(
+                    f"/student/enrollments/{second_enrollment_id}/trainer-chat",
+                    json={"message": "Trying to access another student's chat."},
+                    headers=first_headers,
+                ).status_code,
+                404,
+            )
+            self.assertEqual(
+                self.client.post(
+                    f"/student/enrollments/{first_enrollment_id}/trainer-chat",
+                    json={"message": "   "},
+                    headers=first_headers,
+                ).status_code,
+                422,
+            )
+        finally:
+            db.close()
+
+    def test_testing_override_unlocks_every_module_day(self):
+        db = self.testing_session_local()
+        try:
+            trainer_id = str(uuid.uuid4())
+            student_id = str(uuid.uuid4())
+            course_id = str(uuid.uuid4())
+            enrollment_id = str(uuid.uuid4())
+            trainer = main.models.User(
+                id=trainer_id,
+                name="Testing Trainer",
+                email=f"{trainer_id}@example.com",
+                role="trainer",
+            )
+            student = main.models.User(
+                id=student_id,
+                name="Testing Student",
+                email=f"{student_id}@example.com",
+                role="student",
+                is_access_granted=True,
+            )
+            course = main.models.Course(
+                id=course_id,
+                title="Unlocked Course",
+                trainer_id=trainer_id,
+            )
+            modules = [
+                main.models.Module(
+                    id=str(uuid.uuid4()),
+                    course_id=course_id,
+                    order_index=day,
+                    title=f"Day {day}",
+                    video_url=f"https://example.com/day-{day}",
+                    assignment_prompt="Complete the task.",
+                )
+                for day in range(1, 4)
+            ]
+            db.add_all([
+                trainer,
+                student,
+                course,
+                main.models.Enrollment(
+                    id=enrollment_id,
+                    student_id=student_id,
+                    course_id=course_id,
+                ),
+                *modules,
+            ])
+            db.commit()
+
+            token = auth.create_access_token({"sub": student_id, "role": "student"})
+            response = self.client.get(
+                "/student/dashboard",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(
+                [module["is_unlocked"] for module in response.json()["courses"][0]["modules"]],
+                [True, True, True],
             )
         finally:
             db.close()
