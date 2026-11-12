@@ -688,8 +688,7 @@
     .trainer-course-heading .trainer-course-summary {
       margin: 0;
     }
-    .trainer-lesson-card > h4,
-    .trainer-lesson-questions > h5 {
+    .trainer-lesson-card > h4 {
       margin: 0;
       text-align: left !important;
     }
@@ -704,8 +703,7 @@
       margin-top: 1rem;
       overflow-x: auto;
     }
-    .trainer-lesson-card,
-    .trainer-question-card {
+    .trainer-lesson-card {
       padding: 1rem;
       background: var(--card);
       border: 1px solid var(--border);
@@ -741,35 +739,6 @@
     }
     .trainer-resource-link:hover {
       background: var(--surface-hover);
-    }
-    .trainer-lesson-questions {
-      display: grid;
-      gap: 0.75rem;
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border);
-    }
-    .trainer-lesson-questions h6 {
-      margin: 0;
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-    }
-    .trainer-question-card p {
-      margin: 0.75rem 0;
-      white-space: pre-wrap;
-    }
-    .trainer-question-card textarea {
-      width: 100%;
-      min-height: 4rem;
-      box-sizing: border-box;
-      padding: 0.65rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font: inherit;
-      resize: vertical;
-    }
-    .trainer-question-card button {
-      margin-top: 0.65rem;
     }
     .trainer-pending-table-wrap {
       width: 100%;
@@ -1199,13 +1168,13 @@
           <!-- Dynamic Video/Embed inserted here -->
         </div>
 
-        <section id="lesson-community-card" class="assignment-card" aria-labelledby="lesson-questions-heading">
-          <h4 id="lesson-questions-heading" style="margin-top: 0;">Day questions &amp; answers</h4>
-          <div id="lesson-questions-list"></div>
+        <section id="lesson-community-card" class="assignment-card" aria-labelledby="lesson-question-heading">
+          <h4 id="lesson-question-heading" style="margin-top: 0;">Message your trainer privately</h4>
+          <p>Only you and your trainer can see your message. Your trainer’s reply will appear in your private chat.</p>
           <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
-            <label for="lesson-question-input">Ask the course trainer</label>
+            <label for="lesson-question-input">Your message</label>
             <textarea id="lesson-question-input" maxlength="2000" required style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
-            <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Post question</button>
+            <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Send privately</button>
           </form>
         </section>
 
@@ -2744,7 +2713,6 @@
       document.getElementById('media-player-wrapper').classList.add('hidden');
       document.getElementById('lesson-assignment-card').classList.add('hidden');
       dailyTaskPane.classList.remove('hidden');
-      renderLessonQuestions(mod.questions || []);
       if (activeDailyTaskModuleId !== mod.module_id) {
         activeDailyTaskModuleId = mod.module_id;
         const nextTask = mod.daily_task.tasks.findIndex(task => !task.complete);
@@ -2761,7 +2729,6 @@
     document.getElementById('lesson-assignment-card').classList.remove('hidden');
 
     document.getElementById('current-lesson-title').innerText = `Day ${mod.order_index}`;
-    renderLessonQuestions(mod.questions || []);
     document.getElementById('lesson-assignment-card').classList.remove('hidden');
     loadTaskReviewQr(mod);
 
@@ -3406,48 +3373,6 @@
     }
   }
 
-  function renderLessonQuestions(questions) {
-    const container = document.getElementById('lesson-questions-list');
-    container.replaceChildren();
-    if (questions.length === 0) {
-      const emptyState = document.createElement('p');
-      emptyState.textContent = 'No questions yet. Be the first to ask about this day.';
-      container.appendChild(emptyState);
-      return;
-    }
-
-    questions.forEach(question => {
-      const card = document.createElement('article');
-      card.className = 'card';
-      card.style.marginBottom = '0.75rem';
-
-      const author = document.createElement('strong');
-      author.textContent = question.student_name;
-      card.appendChild(author);
-
-      const questionText = document.createElement('p');
-      questionText.textContent = question.question;
-      card.appendChild(questionText);
-
-      if (question.trainer_reply) {
-        const reply = document.createElement('p');
-        reply.style.borderLeft = '3px solid var(--primary)';
-        reply.style.paddingLeft = '0.75rem';
-        const replyAuthor = document.createElement('strong');
-        replyAuthor.textContent = 'Trainer reply: ';
-        reply.append(replyAuthor, document.createTextNode(question.trainer_reply));
-        card.appendChild(reply);
-      } else {
-        const waiting = document.createElement('small');
-        waiting.style.color = '#64748b';
-        waiting.textContent = 'Waiting for the trainer to reply.';
-        card.appendChild(waiting);
-      }
-
-      container.appendChild(card);
-    });
-  }
-
   async function loadTaskReviewQr(module) {
     const requestEnrollmentId = activeEnrollmentId;
     const requestModuleId = module.module_id;
@@ -3570,7 +3495,7 @@
   }, 15000);
 
   async function submitLessonQuestion() {
-    if (!activeEnrollmentId || !activeModuleId) return;
+    if (!activeEnrollmentId) return;
     const input = document.getElementById('lesson-question-input');
     const submitButton = document.getElementById('lesson-question-submit');
     const question = input.value.trim();
@@ -3584,22 +3509,22 @@
     submitButton.disabled = true;
     try {
       const response = await fetch(
-        `/student/enrollments/${encodeURIComponent(activeEnrollmentId)}/modules/${encodeURIComponent(activeModuleId)}/questions`,
+        `/student/enrollments/${encodeURIComponent(activeEnrollmentId)}/trainer-chat`,
         {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ message: question }),
         }
       );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Could not post your question.');
+      if (!response.ok) throw new Error(data.detail || 'Could not send your private message.');
       input.value = '';
-      await refreshStudentLesson();
+      await openStudentTrainerChat();
     } catch (error) {
-      alert(error.message || 'Could not post your question.');
+      alert(error.message || 'Could not send your private message.');
     } finally {
       submitButton.disabled = false;
     }
@@ -4472,51 +4397,6 @@
       lessonCard.appendChild(assignmentPrompt);
     }
 
-    const questions = module.questions || [];
-    const questionsSection = document.createElement('section');
-    questionsSection.className = 'trainer-lesson-questions';
-    const questionsHeading = document.createElement('h5');
-    questionsHeading.textContent = `Student questions (${questions.length})`;
-    questionsSection.appendChild(questionsHeading);
-    if (questions.length === 0) {
-      const noQuestions = document.createElement('p');
-      noQuestions.className = 'trainer-course-summary';
-      noQuestions.textContent = 'No questions for this day yet.';
-      questionsSection.appendChild(noQuestions);
-    } else {
-      questions.forEach(question => {
-        const questionCard = document.createElement('article');
-        questionCard.className = 'trainer-question-card';
-        const studentName = document.createElement('strong');
-        studentName.textContent = question.student_name;
-        questionCard.appendChild(studentName);
-
-        const questionText = document.createElement('p');
-        questionText.textContent = question.question;
-        questionCard.appendChild(questionText);
-
-        const replyInput = document.createElement('textarea');
-        replyInput.maxLength = 2000;
-        replyInput.required = true;
-        replyInput.value = question.trainer_reply || '';
-        replyInput.placeholder = 'Write a reply visible to students in this course';
-        replyInput.setAttribute('aria-label', `Reply to ${question.student_name}'s question`);
-        questionCard.appendChild(replyInput);
-
-        const replyButton = document.createElement('button');
-        replyButton.type = 'button';
-        replyButton.className = 'profile-link-btn';
-        replyButton.textContent = question.trainer_reply ? 'Update reply' : 'Post reply';
-        replyButton.addEventListener('click', () => replyToLessonQuestion(
-          question.id,
-          replyInput,
-          replyButton
-        ));
-        questionCard.appendChild(replyButton);
-        questionsSection.appendChild(questionCard);
-      });
-    }
-    lessonCard.appendChild(questionsSection);
     section.appendChild(lessonCard);
     courseContainer.appendChild(section);
   }
@@ -4956,38 +4836,6 @@
 
     wrapper.appendChild(table);
     container.appendChild(wrapper);
-  }
-
-  async function replyToLessonQuestion(questionId, replyInput, replyButton) {
-    const reply = replyInput.value.trim();
-    if (!reply) {
-      replyInput.setCustomValidity('Enter a reply before posting.');
-      replyInput.reportValidity();
-      replyInput.setCustomValidity('');
-      return;
-    }
-
-    replyButton.disabled = true;
-    try {
-      const response = await fetch(
-        `/trainer/lesson-questions/${encodeURIComponent(questionId)}/reply`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + localStorage.getItem('jwt_token'),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ reply }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Could not post the trainer reply.');
-      await renderTrainerDashboard();
-    } catch (error) {
-      alert(error.message || 'Could not post the trainer reply.');
-    } finally {
-      replyButton.disabled = false;
-    }
   }
 
   async function deleteApprovedStudent(studentId) {
