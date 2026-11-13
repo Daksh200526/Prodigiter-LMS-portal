@@ -70,8 +70,8 @@ class TestLMSAPI(unittest.TestCase):
         self.assertNotIn('<option value="Java Programming">', response.text)
         self.assertIn('id="student-announcements-button"', response.text)
         self.assertIn('id="student-announcements-modal"', response.text)
-        self.assertIn("Message your trainer privately", response.text)
-        self.assertIn('body: JSON.stringify({ message: question })', response.text)
+        self.assertIn('id="student-trainer-chat-button"', response.text)
+        self.assertNotIn("Message your trainer privately", response.text)
         self.assertNotIn("Student questions (", response.text)
         self.assertIn('function createCourseAnnouncementForm(course)', response.text)
         self.assertNotIn("Announcement title", response.text)
@@ -481,17 +481,6 @@ class TestLMSAPI(unittest.TestCase):
                             "reviews": "20",
                             "rating": "4.5",
                             "photo_count": "10",
-                        },
-                        {
-                            "profile_type": "competitor",
-                            "business_name": "Competitor Dental",
-                            "address": "Vasanth Nagar",
-                            "contact_number": "1234567891",
-                            "business_category": "Dentist",
-                            "website_url": "https://competitor.example.com",
-                            "reviews": "30",
-                            "rating": "4.2",
-                            "photo_count": "12",
                         },
                     ],
                 },

@@ -1035,7 +1035,7 @@ def _load_daily_task_state(progress: models.StudentProgress | None) -> dict:
         ))
         or (competitor is not None and (
             not isinstance(competitor, list)
-            or len(competitor) < 2
+            or len(competitor) < 1
             or len(competitor) > 10
             or any(
                 not isinstance(profile, dict)
@@ -1048,7 +1048,6 @@ def _load_daily_task_state(progress: models.StudentProgress | None) -> dict:
                 for profile in competitor
             )
             or sum(profile["profile_type"] == "business" for profile in competitor) != 1
-            or not any(profile["profile_type"] == "competitor" for profile in competitor)
         ))
         or (posts is not None and (
             not isinstance(posts, list)
@@ -1758,7 +1757,7 @@ def save_daily_task(
         if payload.competitor_profiles is None:
             raise HTTPException(
                 status_code=422,
-                detail="Enter the business and at least one competitor profile.",
+                detail="Enter the business profile.",
             )
         competitor = [
             {
@@ -1770,11 +1769,10 @@ def save_daily_task(
         if (
             any(not value for profile in competitor for value in profile.values())
             or sum(profile["profile_type"] == "business" for profile in competitor) != 1
-            or not any(profile["profile_type"] == "competitor" for profile in competitor)
         ):
             raise HTTPException(
                 status_code=422,
-                detail="Complete one business profile and at least one competitor profile. Use 'Not found' when unavailable.",
+                detail="Complete the business profile. Use 'Not found' when information is unavailable.",
             )
         state["competitor"] = competitor
     else:

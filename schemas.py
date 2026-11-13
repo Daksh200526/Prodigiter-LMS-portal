@@ -108,7 +108,7 @@ class DailyTaskSubmission(BaseModel):
     rankings: Optional[List[str]] = Field(default=None, min_length=14, max_length=14)
     competitor_profiles: Optional[List[DailyCompetitorProfile]] = Field(
         default=None,
-        min_length=2,
+        min_length=1,
         max_length=10,
     )
     posts: Optional[List[DailySocialPost]] = Field(default=None, min_length=3, max_length=3)

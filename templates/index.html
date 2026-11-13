@@ -301,6 +301,16 @@
       border-bottom: 1px solid var(--border);
       scrollbar-width: thin;
     }
+    .daily-task-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .daily-task-actions .submit-btn {
+      margin-top: 0;
+    }
     #lessons-list {
       display: flex;
       flex-direction: column;
@@ -1167,16 +1177,6 @@
         <div id="media-player-wrapper" class="video-container">
           <!-- Dynamic Video/Embed inserted here -->
         </div>
-
-        <section id="lesson-community-card" class="assignment-card" aria-labelledby="lesson-question-heading">
-          <h4 id="lesson-question-heading" style="margin-top: 0;">Message your trainer privately</h4>
-          <p>Only you and your trainer can see your message. Your trainer’s reply will appear in your private chat.</p>
-          <form id="lesson-question-form" onsubmit="event.preventDefault(); submitLessonQuestion();">
-            <label for="lesson-question-input">Your message</label>
-            <textarea id="lesson-question-input" maxlength="2000" required style="width:100%; min-height:4rem; box-sizing:border-box;"></textarea>
-            <button id="lesson-question-submit" type="submit" class="submit-btn" style="width:auto;">Send privately</button>
-          </form>
-        </section>
 
         <div id="lesson-assignment-card" class="assignment-card">
           <h4 style="margin-top: 0; margin-bottom: 0.5rem;">Day Task</h4>
@@ -3088,6 +3088,8 @@
     panel.appendChild(taskHeading);
 
     const form = document.createElement('form');
+    const taskActions = document.createElement('div');
+    taskActions.className = 'daily-task-actions';
     const addField = (labelText, name, value, options = {}) => {
       const wrapper = document.createElement('div');
       wrapper.className = 'form-group';
@@ -3156,7 +3158,7 @@
         });
         form.appendChild(profileContainer);
       };
-      const existingProfiles = savedState.competitor || [{}, {}];
+      const existingProfiles = savedState.competitor || [{profile_type: 'business'}];
       existingProfiles.forEach((profile, index) => addCompetitorProfile(profile, index));
       if (!taskComplete && existingProfiles.length < 10) {
         const addCompetitorButton = document.createElement('button');
@@ -3169,7 +3171,7 @@
           addCompetitorProfile({}, nextIndex);
           if (nextIndex + 1 >= 10) addCompetitorButton.disabled = true;
         });
-        form.appendChild(addCompetitorButton);
+        taskActions.appendChild(addCompetitorButton);
       }
     } else {
       for (let index = 0; index < 3; index += 1) {
@@ -3206,7 +3208,8 @@
       ? 'Task completed'
       : 'Save task';
     saveButton.disabled = taskComplete;
-    form.appendChild(saveButton);
+    taskActions.appendChild(saveButton);
+    form.appendChild(taskActions);
     form.addEventListener('submit', event => {
       event.preventDefault();
       if (!form.reportValidity()) return;
@@ -3500,42 +3503,6 @@
       refreshStudentLesson();
     }
   }, 15000);
-
-  async function submitLessonQuestion() {
-    if (!activeEnrollmentId) return;
-    const input = document.getElementById('lesson-question-input');
-    const submitButton = document.getElementById('lesson-question-submit');
-    const question = input.value.trim();
-    if (!question) {
-      input.setCustomValidity('Enter a question before posting.');
-      input.reportValidity();
-      input.setCustomValidity('');
-      return;
-    }
-
-    submitButton.disabled = true;
-    try {
-      const response = await fetch(
-        `/student/enrollments/${encodeURIComponent(activeEnrollmentId)}/trainer-chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + getSessionAuthValue('jwt_token'),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ message: question }),
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Could not send your private message.');
-      input.value = '';
-      await openStudentTrainerChat();
-    } catch (error) {
-      alert(error.message || 'Could not send your private message.');
-    } finally {
-      submitButton.disabled = false;
-    }
-  }
 
   async function autoMarkVideoCompleted(enrollmentId, moduleId) {
     if (!enrollmentId || !moduleId) return;
