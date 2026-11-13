@@ -1744,14 +1744,6 @@ def save_daily_task(
     if _daily_task_complete(progress):
         raise HTTPException(status_code=409, detail="All tasks for this day are already complete.")
 
-    task_index = DAILY_TASKS.index(payload.task)
-    for previous_task in DAILY_TASKS[:task_index]:
-        if state[previous_task] is None:
-            raise HTTPException(
-                status_code=409,
-                detail="Complete the previous task before continuing.",
-            )
-
     if payload.task == "rankings":
         if payload.rankings is None:
             raise HTTPException(status_code=422, detail="Enter a ranking for every keyword.")

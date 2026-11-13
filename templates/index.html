@@ -3033,10 +3033,6 @@
   function renderDailyTasks(module) {
     const container = document.getElementById('daily-task-checklist');
     const day = module.daily_task;
-    const firstIncompleteTask = day.tasks.findIndex(task => !task.complete);
-    if (firstIncompleteTask >= 0 && activeDailyTaskIndex > firstIncompleteTask) {
-      activeDailyTaskIndex = firstIncompleteTask;
-    }
     activeDailyTaskIndex = Math.max(0, Math.min(activeDailyTaskIndex, day.tasks.length - 1));
     const task = day.tasks[activeDailyTaskIndex];
     const taskComplete = task.complete;
@@ -3054,7 +3050,7 @@
     const instructions = document.createElement('p');
     instructions.className = 'day-one-notice';
     instructions.textContent =
-      'Complete the three tasks in order. Enter “Not found” when ranking or competitor information is unavailable. The review QR code appears after all tasks are complete.';
+      'Complete the three tasks in any order. Enter “Not found” when ranking or competitor information is unavailable. The review QR code appears after all tasks are complete.';
     container.appendChild(instructions);
     if (module.has_custom_assignment_instructions && module.assignment_prompt) {
       const trainerInstructions = document.createElement('p');
@@ -3075,8 +3071,6 @@
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', String(index === activeDailyTaskIndex));
       tab.textContent = `${item.title}${item.complete ? ' ✓' : ''}`;
-      tab.disabled = index > 0
-        && day.tasks.slice(0, index).some(previous => !previous.complete);
       tab.addEventListener('click', () => {
         activeDailyTaskIndex = index;
         renderDailyTasks(module);
@@ -3210,9 +3204,7 @@
     saveButton.style.width = 'auto';
     saveButton.textContent = taskComplete
       ? 'Task completed'
-      : activeDailyTaskIndex === day.tasks.length - 1
-        ? 'Save task and finish the day'
-        : 'Save task and continue';
+      : 'Save task';
     saveButton.disabled = taskComplete;
     form.appendChild(saveButton);
     form.addEventListener('submit', event => {

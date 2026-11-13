@@ -386,7 +386,7 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
-    def test_daily_tasks_are_sequential_and_unlock_the_review_qr(self):
+    def test_daily_tasks_can_be_completed_in_any_order_and_unlock_the_review_qr(self):
         unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
         unlock_patch.start()
         self.addCleanup(unlock_patch.stop)
@@ -465,76 +465,6 @@ class TestLMSAPI(unittest.TestCase):
             )
             self.assertEqual(free_text_bypass.status_code, 409)
 
-            competitor_before_rankings = self.client.post(
-                "/student/daily-task",
-                json={
-                    **base_payload,
-                    "task": "competitor",
-                    "competitor_profiles": [
-                        {
-                            "profile_type": "business",
-                            "business_name": "Example Dental",
-                            "address": "Vasanth Nagar",
-                            "contact_number": "1234567890",
-                            "business_category": "Dentist",
-                            "website_url": "https://example.com",
-                            "reviews": "20",
-                            "rating": "4.5",
-                            "photo_count": "10",
-                        },
-                        {
-                            "profile_type": "competitor",
-                            "business_name": "Competitor Dental",
-                            "address": "Vasanth Nagar",
-                            "contact_number": "1234567891",
-                            "business_category": "Dentist",
-                            "website_url": "https://competitor.example.com",
-                            "reviews": "30",
-                            "rating": "4.2",
-                            "photo_count": "12",
-                        },
-                    ],
-                },
-                headers=headers,
-            )
-            self.assertEqual(competitor_before_rankings.status_code, 409)
-
-            rankings_response = self.client.post(
-                "/student/daily-task",
-                json={
-                    **base_payload,
-                    "task": "rankings",
-                    "rankings": ["Not found"] * 14,
-                },
-                headers=headers,
-            )
-            self.assertEqual(rankings_response.status_code, 200, rankings_response.text)
-            self.assertFalse(rankings_response.json()["daily_task"]["complete"])
-
-            posts_before_competitor = self.client.post(
-                "/student/daily-task",
-                json={
-                    **base_payload,
-                    "task": "posts",
-                    "posts": [
-                        {
-                            "image_description": f"Image prompt {index}",
-                            "content": f"Post content {index}",
-                            "cta": f"Call to action {index}",
-                        }
-                        for index in range(1, 4)
-                    ],
-                },
-                headers=headers,
-            )
-            self.assertEqual(posts_before_competitor.status_code, 409)
-
-            review_before_completion = self.client.get(
-                f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
-                headers=headers,
-            )
-            self.assertEqual(review_before_completion.status_code, 409)
-
             competitor_response = self.client.post(
                 "/student/daily-task",
                 json={
@@ -568,6 +498,7 @@ class TestLMSAPI(unittest.TestCase):
                 headers=headers,
             )
             self.assertEqual(competitor_response.status_code, 200, competitor_response.text)
+            self.assertFalse(competitor_response.json()["daily_task"]["complete"])
 
             posts_response = self.client.post(
                 "/student/daily-task",
@@ -586,7 +517,25 @@ class TestLMSAPI(unittest.TestCase):
                 headers=headers,
             )
             self.assertEqual(posts_response.status_code, 200, posts_response.text)
-            self.assertTrue(posts_response.json()["daily_task"]["complete"])
+            self.assertFalse(posts_response.json()["daily_task"]["complete"])
+
+            review_before_completion = self.client.get(
+                f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
+                headers=headers,
+            )
+            self.assertEqual(review_before_completion.status_code, 409)
+
+            rankings_response = self.client.post(
+                "/student/daily-task",
+                json={
+                    **base_payload,
+                    "task": "rankings",
+                    "rankings": ["Not found"] * 14,
+                },
+                headers=headers,
+            )
+            self.assertEqual(rankings_response.status_code, 200, rankings_response.text)
+            self.assertTrue(rankings_response.json()["daily_task"]["complete"])
 
             qr_response = self.client.get(
                 f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
