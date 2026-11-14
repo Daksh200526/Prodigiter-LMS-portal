@@ -134,7 +134,7 @@ def _ensure_existing_courses_have_twelve_days():
                     assignment_prompt=(
                         "Complete the website checks for each site."
                         if order_index == 1
-                        else "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                        else _daily_task_prompt(order_index)
                     ),
                 ))
         db.commit()
@@ -197,6 +197,16 @@ DAILY_TASK_FIELD_NAMES = (
     "photo_count",
 )
 DAILY_POST_FIELD_NAMES = ("image_description", "content", "cta")
+
+
+def _daily_task_keys_for_day(order_index: int) -> tuple[str, ...]:
+    return ("rankings", "competitor") if order_index % 2 == 0 else ("posts",)
+
+
+def _daily_task_prompt(order_index: int) -> str:
+    if order_index % 2 == 0:
+        return "Complete the keyword rankings and competitor analysis."
+    return "Create three social posts and generate a review."
 
 
 app.add_middleware(
@@ -690,7 +700,7 @@ def student_dashboard(
             day_one_complete = _day_one_complete(prog) if mod.order_index == 1 else False
             is_daily_task_day = 2 <= mod.order_index <= 12
             daily_task_complete = (
-                _daily_task_complete(prog)
+                _daily_task_complete(prog, mod.order_index)
                 if is_daily_task_day and prog and prog.daily_task_state
                 else False
             )
@@ -737,7 +747,7 @@ def student_dashboard(
                     else (
                         assignment_instructions_by_module.get(mod.id)
                         or mod.assignment_prompt
-                        or "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                        or _daily_task_prompt(mod.order_index)
                         if is_daily_task_day
                         else mod.assignment_prompt or ""
                     )
@@ -755,15 +765,29 @@ def student_dashboard(
                 "trainer_feedback": feedback,
                 "day_one": _day_one_payload(prog) if mod.order_index == 1 else None,
                 "daily_task": (
-                    _daily_task_payload(prog)
+                    _daily_task_payload(prog, mod.order_index)
                     if is_daily_task_day
                     else None
                 ),
-                "review_available": bool(mod.order_index != 1 and prog and (
-                    _daily_task_complete(prog)
-                    or prog.assignment_status == "approved"
-                    or (prog.assignment_completed and prog.assignment_completed_at)
-                )),
+                "review_available": bool(
+                    (mod.order_index == 1 and day_one_complete)
+                    or (
+                        is_daily_task_day
+                        and mod.order_index % 2 == 1
+                        and prog
+                        and _daily_task_complete(prog, mod.order_index)
+                    )
+                    or (
+                        not is_daily_task_day
+                        and mod.order_index != 1
+                        and mod.order_index % 2 == 1
+                        and prog
+                        and (
+                            prog.assignment_status == "approved"
+                            or (prog.assignment_completed and prog.assignment_completed_at)
+                        )
+                    )
+                ),
                 "questions": [
                     _lesson_question_payload(question)
                     for question in mod.lesson_questions
@@ -1070,50 +1094,68 @@ def _load_daily_task_state(progress: models.StudentProgress | None) -> dict:
     return state
 
 
-def _daily_task_complete(progress: models.StudentProgress | None) -> bool:
+def _daily_task_complete(
+    progress: models.StudentProgress | None,
+    order_index: int,
+) -> bool:
     if not progress:
         return False
     state = _load_daily_task_state(progress)
-    return all(state[task] is not None for task in DAILY_TASKS)
+    return all(state[task] is not None for task in _daily_task_keys_for_day(order_index))
 
 
-def _daily_task_submission_summary(state: dict) -> str:
-    lines = ["Keyword rankings"]
-    lines.extend(
-        f"- {keyword}: {position}"
-        for keyword, position in zip(DAILY_TASK_KEYWORDS, state["rankings"])
-    )
-    lines.append("\nCompetitor analysis")
-    for profile in state["competitor"]:
-        lines.append(f"\n{profile['profile_type'].title()}")
+def _daily_task_submission_summary(state: dict, order_index: int) -> str:
+    lines = []
+    if "rankings" in _daily_task_keys_for_day(order_index):
+        lines.append("Keyword rankings")
         lines.extend(
-            f"- {key.replace('_', ' ').title()}: {value}"
-            for key, value in profile.items()
-            if key != "profile_type"
+            f"- {keyword}: {position}"
+            for keyword, position in zip(DAILY_TASK_KEYWORDS, state["rankings"])
         )
-    for index, post in enumerate(state["posts"], start=1):
-        lines.extend((
-            f"\nSocial post {index}",
-            f"- Image description: {post['image_description']}",
-            f"- Content: {post['content']}",
-            f"- CTA: {post['cta']}",
-        ))
+        lines.append("\nCompetitor analysis")
+        for profile in state["competitor"]:
+            lines.append(f"\n{profile['profile_type'].title()}")
+            lines.extend(
+                f"- {key.replace('_', ' ').title()}: {value}"
+                for key, value in profile.items()
+                if key != "profile_type"
+            )
+    if "posts" in _daily_task_keys_for_day(order_index):
+        for index, post in enumerate(state["posts"], start=1):
+            lines.extend((
+                f"\nSocial post {index}",
+                f"- Image description: {post['image_description']}",
+                f"- Content: {post['content']}",
+                f"- CTA: {post['cta']}",
+            ))
     return "\n".join(lines)
 
 
-def _daily_task_payload(progress: models.StudentProgress | None) -> dict:
+def _daily_task_payload(
+    progress: models.StudentProgress | None,
+    order_index: int,
+) -> dict:
     state = _load_daily_task_state(progress)
+    available_tasks = _daily_task_keys_for_day(order_index)
+    titles = {
+        "rankings": "Keyword rankings",
+        "competitor": "Competitor analysis",
+        "posts": "Social posts",
+    }
     return {
         "keywords": list(DAILY_TASK_KEYWORDS),
         "tasks": [
-            {"key": "rankings", "title": "Keyword rankings", "complete": state["rankings"] is not None},
-            {"key": "competitor", "title": "Competitor analysis", "complete": state["competitor"] is not None},
-            {"key": "posts", "title": "Social posts", "complete": state["posts"] is not None},
+            {
+                "key": task,
+                "title": titles[task],
+                "complete": state[task] is not None,
+            }
+            for task in available_tasks
         ],
         "rankings": state["rankings"],
         "competitor": state["competitor"],
         "posts": state["posts"],
-        "complete": _daily_task_complete(progress),
+        "complete": _daily_task_complete(progress, order_index),
     }
 
 
@@ -1188,7 +1230,7 @@ def _module_unlock_status(
     if (
         2 <= previous_module.order_index <= 12
         and previous_progress.daily_task_state
-        and not _daily_task_complete(previous_progress)
+        and not _daily_task_complete(previous_progress, previous_module.order_index)
     ):
         return False, f"Complete all Day {previous_module.order_index} tasks first."
     if not previous_progress.assignment_completed:
@@ -1727,6 +1769,11 @@ def save_daily_task(
     )
     if not 2 <= module.order_index <= 12:
         raise HTTPException(status_code=404, detail="Daily portal tasks are available for Days 2–12.")
+    if payload.task not in _daily_task_keys_for_day(module.order_index):
+        raise HTTPException(
+            status_code=422,
+            detail=f"This task is not scheduled for Day {module.order_index}.",
+        )
 
     progress = _get_or_create_daily_task_progress(
         db,
@@ -1740,7 +1787,7 @@ def save_daily_task(
         )
 
     state = _load_daily_task_state(progress)
-    if _daily_task_complete(progress):
+    if _daily_task_complete(progress, module.order_index):
         raise HTTPException(status_code=409, detail="All tasks for this day are already complete.")
 
     if payload.task == "rankings":
@@ -1793,7 +1840,7 @@ def save_daily_task(
         state["posts"] = posts
 
     progress.daily_task_state = json.dumps(state)
-    if _daily_task_complete(progress):
+    if _daily_task_complete(progress, module.order_index):
         completed_at = datetime.datetime.now(timezone.utc)
         progress.is_video_completed = True
         progress.video_completed_at = completed_at
@@ -1801,9 +1848,9 @@ def save_daily_task(
         progress.assignment_completed_at = completed_at
         progress.assignment_status = "submitted"
         progress.submitted_at = completed_at
-        progress.submission_notes = _daily_task_submission_summary(state)
+        progress.submission_notes = _daily_task_submission_summary(state, module.order_index)
     db.commit()
-    return {"daily_task": _daily_task_payload(progress)}
+    return {"daily_task": _daily_task_payload(progress, module.order_index)}
 
 
 def _review_token(progress: models.StudentProgress) -> str:
@@ -1829,7 +1876,7 @@ def _get_review_progress(
     ).filter_by(id=progress_id).first()
     if (
         not progress
-        or (progress.module and progress.module.order_index == 1)
+        or (progress.module and progress.module.order_index % 2 == 0)
         or not progress.assignment_completed
         or not progress.assignment_completed_at
         or not hmac.compare_digest(_review_token(progress), token)
@@ -1865,10 +1912,10 @@ def task_review_qr(
     ).first()
     if not progress:
         raise HTTPException(status_code=404, detail="Day progress not found.")
-    if progress.module and progress.module.order_index == 1:
+    if progress.module and progress.module.order_index % 2 == 0:
         raise HTTPException(
             status_code=409,
-            detail="Day 1 does not use an external review form.",
+            detail="Review forms are available on odd-numbered days.",
         )
     if progress.assignment_status == "approved" and (
         not progress.assignment_completed or not progress.assignment_completed_at
@@ -2329,7 +2376,7 @@ def create_trainer_course(
             else (
                 "Complete the website checks for each site."
                 if order_index == 1
-                else "Complete the keyword rankings, competitor analysis, and three social posts in order."
+                else _daily_task_prompt(order_index)
             )
         )
         db.add(models.Module(

@@ -311,6 +311,23 @@
     .daily-task-actions .submit-btn {
       margin-top: 0;
     }
+    .daily-task-video {
+      margin: 0 0 1rem;
+    }
+    .daily-task-video h4 {
+      margin: 0 0 0.5rem;
+    }
+    .sidebar-button-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    .sidebar-button-label svg {
+      width: 1.15rem;
+      height: 1.15rem;
+      flex: 0 0 auto;
+      color: var(--primary);
+    }
     #lessons-list {
       display: flex;
       flex-direction: column;
@@ -1142,12 +1159,27 @@
       <div id="lessons-list" role="tablist" aria-label="Internship days">Loading days...</div>
       <button id="student-announcements-button" class="announcement-button" type="button"
         onclick="openStudentAnnouncements()" aria-haspopup="dialog">
-        <span>Announcements</span>
+        <span class="sidebar-button-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11v2a2 2 0 0 0 2 2h2l9 5V4l-9 5H5a2 2 0 0 0-2 2Z"></path>
+            <path d="M7 15l1.5 5h3L10 15"></path>
+            <path d="M19 9a5 5 0 0 1 0 6"></path>
+          </svg>
+          <span>Announcements</span>
+        </span>
         <span id="student-announcements-count" class="announcement-badge hidden" aria-label="Unread announcements">0</span>
       </button>
       <button id="student-trainer-chat-button" class="announcement-button" type="button"
         onclick="openStudentTrainerChat()" aria-haspopup="dialog">
-        <span>Chat with your trainer</span>
+        <span class="sidebar-button-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"></path>
+            <path d="M8 11h.01M12 11h.01M16 11h.01"></path>
+          </svg>
+          <span>Chat with your trainer</span>
+        </span>
       </button>
     </div>
 
@@ -2714,10 +2746,10 @@
     if (mod.order_index === 1 && mod.day_one) {
       videoPane.classList.add('hidden');
       dailyTaskPane.classList.add('hidden');
-      reviewPane.classList.add('hidden');
       dayOneVideo.classList.remove('hidden');
       dayOnePane.classList.remove('hidden');
       renderDayOneChecklist(mod);
+      loadTaskReviewQr(mod);
       return;
     }
     dayOneVideo.classList.add('hidden');
@@ -2734,7 +2766,11 @@
         activeDailyTaskIndex = nextTask >= 0 ? nextTask : mod.daily_task.tasks.length - 1;
       }
       renderDailyTasks(mod);
-      loadTaskReviewQr(mod);
+      if (mod.order_index % 2 === 1) {
+        loadTaskReviewQr(mod);
+      } else {
+        reviewPane.classList.add('hidden');
+      }
       return;
     }
     dailyTaskPane.classList.add('hidden');
@@ -2745,7 +2781,11 @@
 
     document.getElementById('current-lesson-title').innerText = `Day ${mod.order_index}`;
     document.getElementById('lesson-assignment-card').classList.remove('hidden');
-    loadTaskReviewQr(mod);
+    if (mod.order_index % 2 === 1) {
+      loadTaskReviewQr(mod);
+    } else {
+      reviewPane.classList.add('hidden');
+    }
 
     const playerWrapper = document.getElementById('media-player-wrapper');
     playerWrapper.replaceChildren();
@@ -3049,8 +3089,9 @@
 
     const instructions = document.createElement('p');
     instructions.className = 'day-one-notice';
-    instructions.textContent =
-      'Complete the three tasks in any order. Enter “Not found” when ranking or competitor information is unavailable. The review QR code appears after all tasks are complete.';
+    instructions.textContent = module.order_index % 2 === 0
+      ? 'Complete the keyword rankings and competitor analysis. Enter “Not found” when information is unavailable.'
+      : 'Create the three social posts for this day. Your review QR code will appear after the task is complete.';
     container.appendChild(instructions);
     if (module.has_custom_assignment_instructions && module.assignment_prompt) {
       const trainerInstructions = document.createElement('p');
@@ -3063,6 +3104,11 @@
     tabs.className = 'daily-task-tabs';
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('aria-label', `Day ${module.order_index} tasks`);
+    const taskIcons = {
+      rankings: '📊',
+      competitor: '🔎',
+      posts: '✍️',
+    };
     day.tasks.forEach((item, index) => {
       const tab = document.createElement('button');
       tab.type = 'button';
@@ -3070,7 +3116,12 @@
         + (index === activeDailyTaskIndex ? ' active' : '');
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', String(index === activeDailyTaskIndex));
-      tab.textContent = `${item.title}${item.complete ? ' ✓' : ''}`;
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = `${taskIcons[item.key]} `;
+      const title = document.createElement('span');
+      title.textContent = `${item.title}${item.complete ? ' ✓' : ''}`;
+      tab.append(icon, title);
       tab.addEventListener('click', () => {
         activeDailyTaskIndex = index;
         renderDailyTasks(module);
@@ -3086,6 +3137,35 @@
     const taskHeading = document.createElement('h3');
     taskHeading.textContent = `${activeDailyTaskIndex + 1}. ${task.title}`;
     panel.appendChild(taskHeading);
+    const taskVideos = {
+      rankings: {
+        title: 'Learn about local keyword rank tracking',
+        videoId: 'l_1d16iJylw',
+      },
+      competitor: {
+        title: 'Watch a local SEO competitor analysis walkthrough',
+        videoId: '7d8Mv3umGBc',
+      },
+    };
+    const taskVideo = taskVideos[task.key];
+    if (taskVideo) {
+      const videoSection = document.createElement('section');
+      videoSection.className = 'daily-task-video';
+      const videoHeading = document.createElement('h4');
+      videoHeading.textContent = taskVideo.title;
+      const videoWrapper = document.createElement('div');
+      videoWrapper.className = 'video-container';
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube-nocookie.com/embed/${taskVideo.videoId}`;
+      iframe.title = taskVideo.title;
+      iframe.loading = 'lazy';
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      videoWrapper.appendChild(iframe);
+      videoSection.append(videoHeading, videoWrapper);
+      panel.appendChild(videoSection);
+    }
 
     const form = document.createElement('form');
     const taskActions = document.createElement('div');
@@ -3222,7 +3302,9 @@
       const completeMessage = document.createElement('p');
       completeMessage.className = 'day-one-notice';
       completeMessage.textContent =
-        'All tasks are complete. Scan the review QR code below to finish the day.';
+        module.order_index % 2 === 1
+          ? 'The social post task is complete. Scan the review QR code below to finish the day.'
+          : 'All tasks for this day are complete.';
       panel.appendChild(completeMessage);
     }
     container.appendChild(panel);
@@ -3293,9 +3375,12 @@
       activeDailyTaskIndex = nextTask >= 0 ? nextTask : data.daily_task.tasks.length - 1;
       module.assignment_completed = data.daily_task.complete;
       module.is_video_completed = data.daily_task.complete;
-      module.review_available = data.daily_task.complete;
+      module.review_available =
+        data.daily_task.complete && module.order_index % 2 === 1;
       renderDailyTasks(module);
-      await loadTaskReviewQr(module);
+      if (module.review_available) {
+        await loadTaskReviewQr(module);
+      }
       if (data.daily_task.complete) {
         await renderStudentDashboard();
       }
@@ -3395,9 +3480,11 @@
     container.appendChild(heading);
     if (!module.review_available) {
       const notice = document.createElement('p');
-      notice.textContent = module.daily_task
-        ? 'Complete all three portal tasks to unlock this day’s review QR code.'
-        : 'After your trainer approves your assignment, a QR code for the reflection form will appear here.';
+      notice.textContent = module.order_index === 1
+        ? 'Complete the Day 1 website checks to unlock your review QR code.'
+        : module.daily_task
+          ? 'Complete this day’s scheduled task to unlock the review QR code.'
+          : 'After your trainer approves your assignment, a QR code for the reflection form will appear here.';
       container.appendChild(notice);
       return;
     }

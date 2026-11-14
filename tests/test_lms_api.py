@@ -362,6 +362,13 @@ class TestLMSAPI(unittest.TestCase):
             )
             completed_modules = completed_dashboard.json()["courses"][0]["modules"]
             self.assertTrue(completed_modules[0]["day_one"]["complete"])
+            self.assertTrue(completed_modules[0]["review_available"])
+            review_qr = self.client.get(
+                f"/student/enrollments/{enrollment_id}/modules/{day_one_id}/review-qr",
+                headers=headers,
+            )
+            self.assertEqual(review_qr.status_code, 200, review_qr.text)
+            self.assertTrue(review_qr.json()["qr_code"])
             self.assertFalse(completed_modules[1]["is_unlocked"])
             self.assertIn("24h cooldown", completed_modules[1]["lock_reason"])
 
@@ -386,8 +393,8 @@ class TestLMSAPI(unittest.TestCase):
         finally:
             db.close()
 
-    def test_daily_tasks_can_be_completed_in_any_order_and_unlock_the_review_qr(self):
-        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", False)
+    def test_daily_tasks_follow_even_odd_schedule_and_reviews_unlock_on_odd_days(self):
+        unlock_patch = patch.object(main, "DAYS_UNLOCKED_FOR_TESTING", True)
         unlock_patch.start()
         self.addCleanup(unlock_patch.stop)
         db = self.testing_session_local()
@@ -454,6 +461,10 @@ class TestLMSAPI(unittest.TestCase):
             initial_dashboard = self.client.get("/student/dashboard", headers=headers)
             day_two_data = initial_dashboard.json()["courses"][0]["modules"][0]
             self.assertEqual(len(day_two_data["daily_task"]["keywords"]), 14)
+            self.assertEqual(
+                [task["key"] for task in day_two_data["daily_task"]["tasks"]],
+                ["rankings", "competitor"],
+            )
 
             free_text_bypass = self.client.post(
                 "/student/submit-assignment",
@@ -505,8 +516,7 @@ class TestLMSAPI(unittest.TestCase):
                 },
                 headers=headers,
             )
-            self.assertEqual(posts_response.status_code, 200, posts_response.text)
-            self.assertFalse(posts_response.json()["daily_task"]["complete"])
+            self.assertEqual(posts_response.status_code, 422, posts_response.text)
 
             review_before_completion = self.client.get(
                 f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
@@ -526,19 +536,50 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(rankings_response.status_code, 200, rankings_response.text)
             self.assertTrue(rankings_response.json()["daily_task"]["complete"])
 
-            qr_response = self.client.get(
+            even_day_qr_response = self.client.get(
                 f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
                 headers=headers,
             )
-            self.assertEqual(qr_response.status_code, 200, qr_response.text)
-            self.assertTrue(qr_response.json()["qr_code"])
+            self.assertEqual(even_day_qr_response.status_code, 409)
 
             completed_dashboard = self.client.get("/student/dashboard", headers=headers)
             completed_modules = completed_dashboard.json()["courses"][0]["modules"]
             self.assertTrue(completed_modules[0]["assignment_completed"])
-            self.assertTrue(completed_modules[0]["review_available"])
-            self.assertFalse(completed_modules[1]["is_unlocked"])
-            self.assertIn("24h cooldown", completed_modules[1]["lock_reason"])
+            self.assertFalse(completed_modules[0]["review_available"])
+            self.assertTrue(completed_modules[1]["is_unlocked"])
+            self.assertEqual(
+                [task["key"] for task in completed_modules[1]["daily_task"]["tasks"]],
+                ["posts"],
+            )
+            day_three_posts = self.client.post(
+                "/student/daily-task",
+                json={
+                    "enrollment_id": enrollment_id,
+                    "module_id": day_three_id,
+                    "task": "posts",
+                    "posts": [
+                        {
+                            "image_description": f"Image prompt {index}",
+                            "content": f"Post content {index}",
+                            "cta": f"Call to action {index}",
+                        }
+                        for index in range(1, 4)
+                    ],
+                },
+                headers=headers,
+            )
+            self.assertEqual(day_three_posts.status_code, 200, day_three_posts.text)
+            self.assertTrue(day_three_posts.json()["daily_task"]["complete"])
+            day_three_qr = self.client.get(
+                f"/student/enrollments/{enrollment_id}/modules/{day_three_id}/review-qr",
+                headers=headers,
+            )
+            self.assertEqual(day_three_qr.status_code, 200, day_three_qr.text)
+            self.assertTrue(day_three_qr.json()["qr_code"])
+            final_dashboard = self.client.get("/student/dashboard", headers=headers)
+            self.assertTrue(
+                final_dashboard.json()["courses"][0]["modules"][1]["review_available"]
+            )
         finally:
             db.close()
 
@@ -671,8 +712,8 @@ class TestLMSAPI(unittest.TestCase):
             module = main.models.Module(
                 id=module_id,
                 course_id=course_id,
-                order_index=2,
-                title="Day 2",
+                order_index=3,
+                title="Day 3",
                 video_url="https://example.com/task-video",
                 assignment_prompt="Complete this task.",
             )
@@ -714,7 +755,7 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(page_response.status_code, 200)
             self.assertIn("Task Reflection", page_response.text)
             self.assertEqual(details_response.status_code, 200)
-            self.assertEqual(details_response.json()["lesson_title"], "Day 2")
+            self.assertEqual(details_response.json()["lesson_title"], "Day 3")
             answers = {
                 question["id"]: question["options"][0]["value"]
                 for question in details_response.json()["questions"]
@@ -3625,8 +3666,7 @@ class TestLMSAPI(unittest.TestCase):
                     title="Day 2",
                     video_url="",
                     assignment_prompt=(
-                        "Complete the keyword rankings, competitor analysis, "
-                        "and three social posts in order."
+                        "Complete the keyword rankings and competitor analysis."
                     ),
                 ),
             ]
@@ -3716,7 +3756,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertTrue(first_modules[1]["has_custom_assignment_instructions"])
         self.assertEqual(
             second_modules[1]["assignment_prompt"],
-            "Complete the keyword rankings, competitor analysis, and three social posts in order.",
+            "Complete the keyword rankings and competitor analysis.",
         )
         trainer_students = trainer_dashboard.json()["courses"][0]["students"]
         first_trainer_student = next(
@@ -3746,7 +3786,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertEqual(reset_personal_update.status_code, 200, reset_personal_update.text)
         self.assertEqual(
             reset_student_dashboard.json()["courses"][0]["modules"][1]["assignment_prompt"],
-            "Complete the keyword rankings, competitor analysis, and three social posts in order.",
+            "Complete the keyword rankings and competitor analysis.",
         )
         self.assertFalse(
             reset_student_dashboard.json()["courses"][0]["modules"][1][
