@@ -380,6 +380,10 @@
       border-color: var(--primary);
       background: var(--accent-soft);
     }
+    .day-one-step-tab:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
     .day-one-step-tab:disabled,
     .day-one-website-tab:disabled {
       opacity: 0.55;
@@ -2721,6 +2725,15 @@
     }
   }
 
+  function nextAvailableDailyTaskIndex(tasks) {
+    const nextTask = tasks.findIndex(task => !task.locked && !task.complete);
+    if (nextTask >= 0) return nextTask;
+    for (let index = tasks.length - 1; index >= 0; index -= 1) {
+      if (!tasks[index].locked) return index;
+    }
+    return 0;
+  }
+
   function selectLesson(moduleId) {
     const mod = activeStudentData.modules.find(m => m.module_id === moduleId);
     if (!mod || !mod.is_unlocked) return;
@@ -2762,8 +2775,7 @@
       dailyTaskPane.classList.remove('hidden');
       if (activeDailyTaskModuleId !== mod.module_id) {
         activeDailyTaskModuleId = mod.module_id;
-        const nextTask = mod.daily_task.tasks.findIndex(task => !task.complete);
-        activeDailyTaskIndex = nextTask >= 0 ? nextTask : mod.daily_task.tasks.length - 1;
+        activeDailyTaskIndex = nextAvailableDailyTaskIndex(mod.daily_task.tasks);
       }
       renderDailyTasks(mod);
       if (mod.order_index % 2 === 1) {
@@ -3090,7 +3102,7 @@
     const instructions = document.createElement('p');
     instructions.className = 'day-one-notice';
     instructions.textContent = module.order_index % 2 === 0
-      ? 'Complete the keyword rankings and competitor analysis. Enter “Not found” when information is unavailable.'
+      ? 'Complete the keyword rankings. Competitor analysis is locked for this day.'
       : 'Create the three social posts for this day. Your review QR code will appear after the task is complete.';
     container.appendChild(instructions);
     if (module.has_custom_assignment_instructions && module.assignment_prompt) {
@@ -3116,11 +3128,17 @@
         + (index === activeDailyTaskIndex ? ' active' : '');
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', String(index === activeDailyTaskIndex));
+      tab.disabled = Boolean(item.locked);
+      if (item.locked) {
+        tab.title = 'Competitor analysis is locked.';
+      }
       const icon = document.createElement('span');
       icon.setAttribute('aria-hidden', 'true');
-      icon.textContent = `${taskIcons[item.key]} `;
+      icon.textContent = item.locked ? '🔒 ' : `${taskIcons[item.key]} `;
       const title = document.createElement('span');
-      title.textContent = `${item.title}${item.complete ? ' ✓' : ''}`;
+      title.textContent = item.locked
+        ? `${item.title} (Locked)`
+        : `${item.title}${item.complete ? ' ✓' : ''}`;
       tab.append(icon, title);
       tab.addEventListener('click', () => {
         activeDailyTaskIndex = index;
@@ -3137,6 +3155,15 @@
     const taskHeading = document.createElement('h3');
     taskHeading.textContent = `${activeDailyTaskIndex + 1}. ${task.title}`;
     panel.appendChild(taskHeading);
+    if (task.locked) {
+      const lockedNotice = document.createElement('p');
+      lockedNotice.className = 'day-one-notice';
+      lockedNotice.textContent =
+        'Competitor analysis is locked. Only keyword rankings are available on even-numbered days.';
+      panel.appendChild(lockedNotice);
+      container.appendChild(panel);
+      return;
+    }
     const taskVideos = {
       rankings: {
         title: 'Learn about local keyword rank tracking',
@@ -3371,8 +3398,7 @@
       }
       if (activeEnrollmentId !== enrollmentId || activeModuleId !== module.module_id) return;
       module.daily_task = data.daily_task;
-      const nextTask = data.daily_task.tasks.findIndex(item => !item.complete);
-      activeDailyTaskIndex = nextTask >= 0 ? nextTask : data.daily_task.tasks.length - 1;
+      activeDailyTaskIndex = nextAvailableDailyTaskIndex(data.daily_task.tasks);
       module.assignment_completed = data.daily_task.complete;
       module.is_video_completed = data.daily_task.complete;
       module.review_available =

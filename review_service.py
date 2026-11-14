@@ -85,10 +85,13 @@ def generate_review(
             {
                 "role": "system",
                 "content": (
-                    "Write a concise, first-person student review using only the "
-                    "provided multiple-choice answers and course/task names. Do not "
-                    "invent events, outcomes, features, or claims. Reflect negative "
-                    "or neutral answers honestly; do not turn them into praise. "
+                    "Write a concise, natural-sounding first-person draft of the "
+                    "student's feedback using only the provided multiple-choice "
+                    "answers and course/task names. Vary sentence structure and "
+                    "wording so drafts do not sound formulaic. Do not invent events, "
+                    "outcomes, features, or claims, intentionally add writing errors, "
+                    "or imitate a specific person's style. Reflect negative or "
+                    "neutral answers honestly; do not turn them into praise. "
                     "Return only the review text in 2-4 sentences."
                 ),
             },
@@ -101,7 +104,7 @@ def generate_review(
                 }),
             },
         ],
-        "temperature": 0.4,
+        "temperature": 0.7,
         "max_tokens": 180,
     }).encode("utf-8")
     request = Request(

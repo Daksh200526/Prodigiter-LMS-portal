@@ -280,7 +280,20 @@ class TestLMSAPI(unittest.TestCase):
             self.assertEqual(initial_modules[0]["title"], "Day 1")
             self.assertFalse(initial_modules[0]["is_video_completed"])
             self.assertFalse(initial_modules[1]["is_unlocked"])
+            self.assertIn("Complete Day 1 first", initial_modules[1]["lock_reason"])
             self.assertNotIn("assignment_link", initial_modules[0])
+
+            locked_task_response = self.client.post(
+                "/student/daily-task",
+                json={
+                    "enrollment_id": enrollment_id,
+                    "module_id": day_two_id,
+                    "task": "rankings",
+                    "rankings": ["Not found"] * 14,
+                },
+                headers=headers,
+            )
+            self.assertEqual(locked_task_response.status_code, 403)
 
             base_payload = {
                 "enrollment_id": enrollment_id,
@@ -404,6 +417,7 @@ class TestLMSAPI(unittest.TestCase):
         enrollment_id = str(uuid.uuid4())
         day_two_id = str(uuid.uuid4())
         day_three_id = str(uuid.uuid4())
+        day_four_id = str(uuid.uuid4())
         try:
             trainer = main.models.User(
                 id=trainer_id,
@@ -444,7 +458,18 @@ class TestLMSAPI(unittest.TestCase):
                 video_url="",
                 assignment_prompt="",
             )
-            db.add_all([trainer, student, course, enrollment, day_two, day_three])
+            day_four = main.models.Module(
+                id=day_four_id,
+                course_id=course_id,
+                order_index=4,
+                title="Day 4",
+                video_url="",
+                assignment_prompt="",
+            )
+            db.add_all([
+                trainer, student, course, enrollment,
+                day_two, day_three, day_four,
+            ])
             db.commit()
             token = auth.create_access_token({
                 "sub": student_id,
@@ -465,6 +490,14 @@ class TestLMSAPI(unittest.TestCase):
                 [task["key"] for task in day_two_data["daily_task"]["tasks"]],
                 ["rankings", "competitor"],
             )
+            self.assertFalse(day_two_data["daily_task"]["tasks"][0]["locked"])
+            self.assertTrue(day_two_data["daily_task"]["tasks"][1]["locked"])
+            day_four_data = initial_dashboard.json()["courses"][0]["modules"][2]
+            self.assertEqual(
+                [task["key"] for task in day_four_data["daily_task"]["tasks"]],
+                ["rankings", "competitor"],
+            )
+            self.assertTrue(day_four_data["daily_task"]["tasks"][1]["locked"])
 
             free_text_bypass = self.client.post(
                 "/student/submit-assignment",
@@ -481,24 +514,10 @@ class TestLMSAPI(unittest.TestCase):
                 json={
                     **base_payload,
                     "task": "competitor",
-                    "competitor_profiles": [
-                        {
-                            "profile_type": "business",
-                            "business_name": "Example Dental",
-                            "address": "Vasanth Nagar",
-                            "contact_number": "1234567890",
-                            "business_category": "Dentist",
-                            "website_url": "https://example.com",
-                            "reviews": "20",
-                            "rating": "4.5",
-                            "photo_count": "10",
-                        },
-                    ],
                 },
                 headers=headers,
             )
-            self.assertEqual(competitor_response.status_code, 200, competitor_response.text)
-            self.assertFalse(competitor_response.json()["daily_task"]["complete"])
+            self.assertEqual(competitor_response.status_code, 422, competitor_response.text)
 
             posts_response = self.client.post(
                 "/student/daily-task",
@@ -522,7 +541,7 @@ class TestLMSAPI(unittest.TestCase):
                 f"/student/enrollments/{enrollment_id}/modules/{day_two_id}/review-qr",
                 headers=headers,
             )
-            self.assertEqual(review_before_completion.status_code, 409)
+            self.assertEqual(review_before_completion.status_code, 404)
 
             rankings_response = self.client.post(
                 "/student/daily-task",
@@ -620,8 +639,9 @@ class TestLMSAPI(unittest.TestCase):
                     video_url=f"https://example.com/lesson-{order_index}",
                     assignment_prompt="Complete the task.",
                 )
-                for order_index in range(1, 4)
+                for order_index in range(1, 5)
             ]
+            now = datetime.datetime.now(datetime.timezone.utc)
             enrollment = main.models.Enrollment(
                 id=enrollment_id,
                 student_id=student_id,
@@ -633,9 +653,7 @@ class TestLMSAPI(unittest.TestCase):
                 module_id=modules[0].id,
                 is_video_completed=True,
                 assignment_completed=True,
-                assignment_completed_at=datetime.datetime.now(
-                    datetime.timezone.utc
-                ) - datetime.timedelta(hours=23),
+                assignment_completed_at=now - datetime.timedelta(hours=23),
                 day_one_state=json.dumps({
                     "visited": [True] * 5,
                     "answers": [["yes"] * 9 for _ in range(5)],
@@ -647,20 +665,43 @@ class TestLMSAPI(unittest.TestCase):
                 module_id=modules[1].id,
                 is_video_completed=True,
                 assignment_completed=True,
-                assignment_completed_at=datetime.datetime.now(
-                    datetime.timezone.utc
-                ) - datetime.timedelta(hours=23),
+                assignment_completed_at=now - datetime.timedelta(hours=23),
+                daily_task_state=json.dumps({
+                    "rankings": ["Not found"] * len(main.DAILY_TASK_KEYWORDS),
+                    "competitor": None,
+                    "posts": None,
+                }),
+            )
+            day_three_progress = main.models.StudentProgress(
+                id=str(uuid.uuid4()),
+                enrollment_id=enrollment_id,
+                module_id=modules[2].id,
+                is_video_completed=True,
+                assignment_completed=True,
+                assignment_completed_at=now - datetime.timedelta(hours=23),
+                daily_task_state=json.dumps({
+                    "rankings": None,
+                    "competitor": None,
+                    "posts": [
+                        {
+                            "image_description": "Image prompt",
+                            "content": "Post content",
+                            "cta": "Call to action",
+                        }
+                        for _ in range(3)
+                    ],
+                }),
             )
             db.add_all([
                 trainer, student, course, *modules, enrollment,
-                intro_progress, task_progress,
+                intro_progress, task_progress, day_three_progress,
             ])
             db.commit()
             progress_by_module = {
                 intro_progress.module_id: intro_progress,
                 task_progress.module_id: task_progress,
+                day_three_progress.module_id: day_three_progress,
             }
-            now = datetime.datetime.now(datetime.timezone.utc)
 
             lesson_two_unlocked = main._module_unlock_status(
                 db, enrollment, modules, 1, now, progress_by_module
@@ -668,17 +709,32 @@ class TestLMSAPI(unittest.TestCase):
             lesson_three_locked = main._module_unlock_status(
                 db, enrollment, modules, 2, now, progress_by_module
             )
+            lesson_four_locked = main._module_unlock_status(
+                db, enrollment, modules, 3, now, progress_by_module
+            )
+            intro_progress.assignment_completed_at -= datetime.timedelta(hours=1)
             task_progress.assignment_completed_at -= datetime.timedelta(hours=1)
+            day_three_progress.assignment_completed_at -= datetime.timedelta(hours=1)
             db.commit()
+            lesson_two_unlocked_after_cooldown = main._module_unlock_status(
+                db, enrollment, modules, 1, now, progress_by_module
+            )
             lesson_three_unlocked = main._module_unlock_status(
                 db, enrollment, modules, 2, now, progress_by_module
+            )
+            lesson_four_unlocked = main._module_unlock_status(
+                db, enrollment, modules, 3, now, progress_by_module
             )
 
             self.assertFalse(lesson_two_unlocked[0])
             self.assertIn("24h cooldown", lesson_two_unlocked[1])
             self.assertFalse(lesson_three_locked[0])
             self.assertIn("24h cooldown", lesson_three_locked[1])
+            self.assertFalse(lesson_four_locked[0])
+            self.assertIn("24h cooldown", lesson_four_locked[1])
+            self.assertTrue(lesson_two_unlocked_after_cooldown[0])
             self.assertTrue(lesson_three_unlocked[0])
+            self.assertTrue(lesson_four_unlocked[0])
         finally:
             db.close()
 
@@ -798,6 +854,10 @@ class TestLMSAPI(unittest.TestCase):
                 "https://example.com/reviews",
             )
             self.assertNotIn(student.email, openai_request.call_args.args[0].data.decode())
+            request_payload = json.loads(openai_request.call_args.args[0].data.decode())
+            self.assertEqual(request_payload["temperature"], 0.7)
+            self.assertIn("Vary sentence structure", request_payload["messages"][0]["content"])
+            self.assertIn("intentionally add writing errors", request_payload["messages"][0]["content"])
             db.refresh(progress)
             self.assertIsNotNone(progress.review_generated_at)
             self.assertEqual(
@@ -3666,7 +3726,7 @@ class TestLMSAPI(unittest.TestCase):
                     title="Day 2",
                     video_url="",
                     assignment_prompt=(
-                        "Complete the keyword rankings and competitor analysis."
+                        "Complete the keyword rankings. Competitor analysis is locked."
                     ),
                 ),
             ]
@@ -3756,7 +3816,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertTrue(first_modules[1]["has_custom_assignment_instructions"])
         self.assertEqual(
             second_modules[1]["assignment_prompt"],
-            "Complete the keyword rankings and competitor analysis.",
+            "Complete the keyword rankings. Competitor analysis is locked.",
         )
         trainer_students = trainer_dashboard.json()["courses"][0]["students"]
         first_trainer_student = next(
@@ -3786,7 +3846,7 @@ class TestLMSAPI(unittest.TestCase):
         self.assertEqual(reset_personal_update.status_code, 200, reset_personal_update.text)
         self.assertEqual(
             reset_student_dashboard.json()["courses"][0]["modules"][1]["assignment_prompt"],
-            "Complete the keyword rankings and competitor analysis.",
+            "Complete the keyword rankings. Competitor analysis is locked.",
         )
         self.assertFalse(
             reset_student_dashboard.json()["courses"][0]["modules"][1][

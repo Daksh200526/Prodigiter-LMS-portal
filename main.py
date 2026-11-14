@@ -200,12 +200,12 @@ DAILY_POST_FIELD_NAMES = ("image_description", "content", "cta")
 
 
 def _daily_task_keys_for_day(order_index: int) -> tuple[str, ...]:
-    return ("rankings", "competitor") if order_index % 2 == 0 else ("posts",)
+    return ("rankings",) if order_index % 2 == 0 else ("posts",)
 
 
 def _daily_task_prompt(order_index: int) -> str:
     if order_index % 2 == 0:
-        return "Complete the keyword rankings and competitor analysis."
+        return "Complete the keyword rankings. Competitor analysis is locked."
     return "Create three social posts and generate a review."
 
 
@@ -1112,14 +1112,15 @@ def _daily_task_submission_summary(state: dict, order_index: int) -> str:
             f"- {keyword}: {position}"
             for keyword, position in zip(DAILY_TASK_KEYWORDS, state["rankings"])
         )
-        lines.append("\nCompetitor analysis")
-        for profile in state["competitor"]:
-            lines.append(f"\n{profile['profile_type'].title()}")
-            lines.extend(
-                f"- {key.replace('_', ' ').title()}: {value}"
-                for key, value in profile.items()
-                if key != "profile_type"
-            )
+        if "competitor" in _daily_task_keys_for_day(order_index):
+            lines.append("\nCompetitor analysis")
+            for profile in state["competitor"]:
+                lines.append(f"\n{profile['profile_type'].title()}")
+                lines.extend(
+                    f"- {key.replace('_', ' ').title()}: {value}"
+                    for key, value in profile.items()
+                    if key != "profile_type"
+                )
     if "posts" in _daily_task_keys_for_day(order_index):
         for index, post in enumerate(state["posts"], start=1):
             lines.extend((
@@ -1149,9 +1150,19 @@ def _daily_task_payload(
                 "key": task,
                 "title": titles[task],
                 "complete": state[task] is not None,
+                "locked": False,
             }
             for task in available_tasks
-        ],
+        ] + (
+            [{
+                "key": "competitor",
+                "title": titles["competitor"],
+                "complete": False,
+                "locked": True,
+            }]
+            if order_index % 2 == 0
+            else []
+        ),
         "rankings": state["rankings"],
         "competitor": state["competitor"],
         "posts": state["posts"],
